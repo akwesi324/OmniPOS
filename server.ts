@@ -67,6 +67,23 @@ async function startServer() {
     }
   });
 
+  // Purchase Order Email Simulation
+  app.post('/api/orders/send-email', async (req, res) => {
+    const { orderId, supplierEmail, subject, body } = req.body;
+    try {
+      console.log(`Simulating email to ${supplierEmail} for Order ${orderId}`);
+      // Simulate network delay
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      
+      res.json({
+        status: 'success',
+        message: `Purchase Order ${orderId} has been emailed to ${supplierEmail}`
+      });
+    } catch (error) {
+      res.status(500).json({ status: 'error', message: 'Failed to send email' });
+    }
+  });
+
   // Flutterwave Initialization
   app.post('/api/payments/flutterwave/initialize', async (req, res) => {
     const { amount, email, phone, currency } = req.body;

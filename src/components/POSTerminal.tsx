@@ -20,6 +20,7 @@ export default function POSTerminal() {
   const [paymentStatus, setPaymentStatus] = useState<'idle' | 'initializing' | 'waiting' | 'verifying' | 'success' | 'error'>('idle');
   const [activeProvider, setActiveProvider] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [transactionDetails, setTransactionDetails] = useState<any>(null);
 
   const products = [
     { id: '1', name: 'Coffee Latte', price: 25.5, category: 'Drinks' },
@@ -64,6 +65,7 @@ export default function POSTerminal() {
       
       if (result.status === 'success' || result.status === true) {
         setPaymentStatus('waiting');
+        setTransactionDetails(result.data);
         
         // In a real app, you would use window.open(result.data.link or result.data.authorization_url)
         // For the school project, we simulate the 'user paying' action
@@ -122,71 +124,89 @@ export default function POSTerminal() {
             <motion.div 
               initial={{ scale: 0.9, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
-              className="bg-white dark:bg-slate-900 p-8 rounded-3xl shadow-2xl text-center max-w-sm w-full mx-4"
+              className="bg-white dark:bg-slate-900 rounded-3xl shadow-2xl text-center max-w-sm w-full mx-4 overflow-hidden"
             >
-              {paymentStatus === 'initializing' || paymentStatus === 'waiting' || paymentStatus === 'verifying' ? (
-                <div className="space-y-6">
-                  <div className="flex justify-center">
-                    <Loader2 size={64} className="text-blue-600 animate-spin" />
-                  </div>
-                  <div className="space-y-2">
-                    <h3 className="text-xl font-bold text-slate-900 dark:text-white uppercase tracking-tight">
-                      {paymentStatus === 'initializing' && 'Initializing Gateway...'}
-                      {paymentStatus === 'waiting' && `Waiting for ${activeProvider}...`}
-                      {paymentStatus === 'verifying' && 'Verifying Payment...'}
-                    </h3>
-                    <p className="text-sm text-slate-500">
-                      {paymentStatus === 'waiting' ? 'Please complete the prompt on your mobile device.' : 'Finalizing transaction details...'}
-                    </p>
-                  </div>
-                  <div className="pt-4 border-t border-slate-100 dark:border-slate-800 flex justify-between items-center">
-                    <span className="text-[10px] font-black text-slate-400 uppercase">Amount Due</span>
-                    <p className="text-sm font-black text-blue-600">GHS {total.toFixed(2)}</p>
-                  </div>
-                </div>
-              ) : paymentStatus === 'success' ? (
-                <div className="space-y-6">
-                  <div className="flex justify-center">
-                    <motion.div
-                      initial={{ scale: 0 }}
-                      animate={{ scale: 1 }}
-                      transition={{ type: "spring", damping: 12 }}
-                    >
-                      <div className="w-20 h-20 bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center">
-                        <CheckCircle2 size={48} className="text-green-500" />
+              <div className="p-8">
+                {paymentStatus === 'initializing' || paymentStatus === 'waiting' || paymentStatus === 'verifying' ? (
+                  <div className="space-y-6">
+                    <div className="flex justify-center">
+                      <Loader2 size={64} className="text-blue-600 animate-spin" />
+                    </div>
+                    <div className="space-y-2">
+                      <h3 className="text-xl font-bold text-slate-900 dark:text-white uppercase tracking-tight">
+                        {paymentStatus === 'initializing' && 'Initializing Gateway...'}
+                        {paymentStatus === 'waiting' && `Waiting for ${activeProvider}...`}
+                        {paymentStatus === 'verifying' && 'Verifying Payment...'}
+                      </h3>
+                      <p className="text-sm text-slate-500">
+                        {paymentStatus === 'waiting' ? 'Please complete the prompt on your mobile device.' : 'Finalizing transaction details...'}
+                      </p>
+                    </div>
+                    
+                    {transactionDetails && (
+                      <div className="bg-slate-50 dark:bg-slate-800 rounded-2xl p-4 space-y-2 text-left border border-slate-100 dark:border-slate-700">
+                        <div className="flex justify-between items-center">
+                          <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Ref</span>
+                          <span className="text-xs font-mono font-bold text-slate-600 dark:text-slate-300">
+                            {transactionDetails.tx_ref?.substring(0, 12)}...
+                          </span>
+                        </div>
+                        <div className="flex justify-between items-center">
+                          <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Gateway</span>
+                          <span className="text-xs font-bold text-slate-600 dark:text-slate-300">{activeProvider}</span>
+                        </div>
                       </div>
-                    </motion.div>
-                  </div>
-                  <div className="space-y-2">
-                    <h3 className="text-2xl font-black text-slate-900 dark:text-white">Sale Complete</h3>
-                    <p className="text-sm text-slate-500">Receipt generated successfully. Check your email for a copy.</p>
-                  </div>
-                  <button 
-                    onClick={() => setPaymentStatus('idle')}
-                    className="w-full py-4 bg-slate-900 dark:bg-white text-white dark:text-black rounded-xl font-black text-xs uppercase tracking-widest hover:scale-[1.02] active:scale-[0.98] transition-all"
-                  >
-                    Done
-                  </button>
-                </div>
-              ) : (
-                <div className="space-y-6">
-                  <div className="flex justify-center">
-                    <div className="w-20 h-20 bg-red-100 dark:bg-red-900/30 rounded-full flex items-center justify-center">
-                      <AlertCircle size={48} className="text-red-500" />
+                    )}
+
+                    <div className="pt-4 border-t border-slate-100 dark:border-slate-800 flex justify-between items-center">
+                      <span className="text-[10px] font-black text-slate-400 uppercase">Amount Due</span>
+                      <p className="text-sm font-black text-blue-600">GHS {total.toFixed(2)}</p>
                     </div>
                   </div>
-                  <div className="space-y-2">
-                    <h3 className="text-xl font-bold text-slate-900 dark:text-white uppercase">Transaction Failed</h3>
-                    <p className="text-sm text-slate-500 leading-relaxed">{errorMessage || 'The payment was declined or timed out. Please try again or use another method.'}</p>
+                ) : paymentStatus === 'success' ? (
+                  <div className="space-y-6">
+                    <div className="flex justify-center">
+                      <motion.div
+                        initial={{ scale: 0 }}
+                        animate={{ scale: 1 }}
+                        transition={{ type: "spring", damping: 12 }}
+                      >
+                        <div className="w-20 h-20 bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center">
+                          <CheckCircle2 size={48} className="text-green-500" />
+                        </div>
+                      </motion.div>
+                    </div>
+                    <div className="space-y-2">
+                      <h3 className="text-2xl font-black text-slate-900 dark:text-white">Sale Complete</h3>
+                      <p className="text-sm text-slate-500">Receipt generated successfully. Check your email for a copy.</p>
+                    </div>
+                    <button 
+                      onClick={() => setPaymentStatus('idle')}
+                      className="w-full py-4 bg-slate-900 dark:bg-white text-white dark:text-black rounded-xl font-black text-xs uppercase tracking-widest hover:scale-[1.02] active:scale-[0.98] transition-all"
+                    >
+                      Done
+                    </button>
                   </div>
-                  <button 
-                    onClick={() => setPaymentStatus('idle')}
-                    className="w-full py-4 bg-red-600 text-white rounded-xl font-black text-xs uppercase tracking-widest hover:bg-red-700 transition-all"
-                  >
-                    Try Again
-                  </button>
-                </div>
-              )}
+                ) : (
+                  <div className="space-y-6">
+                    <div className="flex justify-center">
+                      <div className="w-20 h-20 bg-red-100 dark:bg-red-900/30 rounded-full flex items-center justify-center">
+                        <AlertCircle size={48} className="text-red-500" />
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <h3 className="text-xl font-bold text-slate-900 dark:text-white uppercase">Transaction Failed</h3>
+                      <p className="text-sm text-slate-500 leading-relaxed">{errorMessage || 'The payment was declined or timed out. Please try again or use another method.'}</p>
+                    </div>
+                    <button 
+                      onClick={() => setPaymentStatus('idle')}
+                      className="w-full py-4 bg-red-600 text-white rounded-xl font-black text-xs uppercase tracking-widest hover:bg-red-700 transition-all"
+                    >
+                      Try Again
+                    </button>
+                  </div>
+                )}
+              </div>
             </motion.div>
           </motion.div>
         )}
