@@ -44,6 +44,22 @@ interface PurchaseOrder {
 export default function InventoryManager() {
   const [activeSubTab, setActiveSubTab] = useState<SubTab>('products');
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingPOId, setEditingPOId] = useState<string | null>(null);
+  
+  // Product management states
+  const [isProductModalOpen, setIsProductModalOpen] = useState(false);
+  const [editingProductId, setEditingProductId] = useState<string | null>(null);
+  const [productForm, setProductForm] = useState({
+    name: '', sku: '', cat: 'Drinks', price: 0, stock: 0, threshold: 0, dailyVelocity: 0
+  });
+
+  // Supplier details states
+  const [selectedSupplierState, setSelectedSupplierState] = useState<any | null>(null);
+  const [isSupplierModalOpen, setIsSupplierModalOpen] = useState(false);
+
+  // Filtering states
+  const [poStatusFilter, setPoStatusFilter] = useState<'all' | 'pending' | 'received'>('all');
+  const [productSearch, setProductSearch] = useState('');
   
   // Email states
   const [isEmailModalOpen, setIsEmailModalOpen] = useState(false);
@@ -118,21 +134,67 @@ export default function InventoryManager() {
     const supplier = suppliers.find(s => s.id === selectedSupplierId);
     const total = orderItems.reduce((sum, item) => sum + (item.costPrice * item.quantity), 0);
     
-    const newPO: PurchaseOrder = {
-      id: `PO-${Math.floor(1000 + Math.random() * 9000)}`,
-      supplier: supplier?.name || 'Unknown',
-      supplierEmail: supplier?.email || 'vendor@example.com',
-      date: new Date().toISOString().split('T')[0],
-      status: 'pending',
-      total: total,
-      items: orderItems
-    };
+    if (editingPOId) {
+      setPurchaseOrders(prev => prev.map(o => o.id === editingPOId ? {
+        ...o,
+        supplier: supplier?.name || o.supplier,
+        supplierEmail: supplier?.email || o.supplierEmail,
+        total: total,
+        items: orderItems
+      } : o));
+      setEditingPOId(null);
+    } else {
+      const newPO: PurchaseOrder = {
+        id: `PO-${Math.floor(1000 + Math.random() * 9000)}`,
+        supplier: supplier?.name || 'Unknown',
+        supplierEmail: supplier?.email || 'vendor@example.com',
+        date: new Date().toISOString().split('T')[0],
+        status: 'pending',
+        total: total,
+        items: orderItems
+      };
+      setPurchaseOrders([newPO, ...purchaseOrders]);
+    }
     
-    setPurchaseOrders([newPO, ...purchaseOrders]);
     setIsModalOpen(false);
     setOrderItems([]);
     setSelectedSupplierId('');
     setActiveSubTab('orders');
+  };
+
+  const handleEditPO = (po: PurchaseOrder) => {
+    if (po.status === 'received') return;
+    setEditingPOId(po.id);
+    const supplier = suppliers.find(s => s.name === po.supplier);
+    setSelectedSupplierId(supplier?.id || '');
+    setOrderItems(po.items);
+    setIsModalOpen(true);
+  };
+
+  const handleAddProduct = () => {
+    if (editingProductId) {
+      setProducts(prev => prev.map(p => p.id === editingProductId ? { 
+        ...productForm, 
+        id: p.id,
+        // Calculate dailyVelocity if not provided or keep it
+        dailyVelocity: productForm.dailyVelocity || p.dailyVelocity
+      } : p));
+    } else {
+      const newProduct = {
+        ...productForm,
+        id: (products.length + 1).toString(),
+      };
+      setProducts([...products, newProduct]);
+    }
+    setIsProductModalOpen(false);
+    setEditingProductId(null);
+    setProductForm({ name: '', sku: '', cat: 'Drinks', price: 0, stock: 0, threshold: 0, dailyVelocity: 0.1 });
+  };
+
+  const handleEditProduct = (p: any) => {
+    setEditingProductId(p.id);
+    setProductForm({ ...p });
+    setIsProductModalOpen(true);
   };
 
   const generateEmailPreview = async (po: PurchaseOrder) => {
@@ -260,7 +322,9 @@ export default function InventoryManager() {
             >
               <div className="p-8 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center bg-slate-50 dark:bg-slate-800/50">
                 <div>
-                  <h3 className="text-2xl font-black text-slate-900 dark:text-white tracking-tight">Create Purchase Order</h3>
+                  <h3 className="text-2xl font-black text-slate-900 dark:text-white tracking-tight">
+                    {editingPOId ? 'Edit Purchase Order' : 'Create Purchase Order'}
+                  </h3>
                   <p className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest mt-1">Stock Replenishment Service</p>
                 </div>
                 <button 
@@ -370,8 +434,21 @@ export default function InventoryManager() {
                       onClick={handleCreatePO}
                       className="w-full py-4 bg-slate-900 dark:bg-white text-white dark:text-slate-900 rounded-2xl text-[10px] font-black uppercase tracking-[0.2em] shadow-xl shadow-slate-900/10 dark:shadow-none hover:translate-y-[-2px] active:translate-y-0 transition-all disabled:opacity-50 disabled:translate-y-0"
                     >
-                      Issue Purchase Order
+                      {editingPOId ? 'Update Purchase Order' : 'Issue Purchase Order'}
                     </button>
+                    {editingPOId && (
+                      <button 
+                        onClick={() => {
+                          setEditingPOId(null);
+                          setOrderItems([]);
+                          setSelectedSupplierId('');
+                          setIsModalOpen(false);
+                        }}
+                        className="w-full py-2 text-[10px] font-black text-slate-400 uppercase tracking-widest hover:text-red-500 transition-colors"
+                      >
+                        Discard Changes
+                      </button>
+                    )}
                   </div>
                 </div>
               </div>
@@ -480,7 +557,206 @@ export default function InventoryManager() {
         )}
       </AnimatePresence>
 
-      {/* Module Header */}
+      {/* Product Modal */}
+      <AnimatePresence>
+        {isProductModalOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setIsProductModalOpen(false)}
+              className="absolute inset-0 bg-slate-900/60 backdrop-blur-md"
+            />
+            <motion.div 
+              initial={{ scale: 0.9, opacity: 0, y: 20 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.9, opacity: 0, y: 20 }}
+              className="relative w-full max-w-xl bg-white dark:bg-slate-900 rounded-[2.5rem] shadow-2xl overflow-hidden flex flex-col"
+            >
+              <div className="p-8 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center bg-slate-50 dark:bg-slate-800/50">
+                <div>
+                  <h3 className="text-2xl font-black text-slate-900 dark:text-white tracking-tight">
+                    {editingProductId ? 'Edit Product' : 'Add New Product'}
+                  </h3>
+                  <p className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest mt-1">Inventory Control</p>
+                </div>
+                <button onClick={() => setIsProductModalOpen(false)} className="p-3 hover:bg-slate-200 rounded-2xl transition-colors text-slate-400">
+                  <X size={24} />
+                </button>
+              </div>
+
+              <div className="p-8 space-y-6">
+                <div className="grid grid-cols-2 gap-6">
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 text-slate-400">Product Name</label>
+                    <input 
+                      type="text" 
+                      value={productForm.name}
+                      onChange={(e) => setProductForm({...productForm, name: e.target.value})}
+                      className="w-full p-4 bg-slate-50 dark:bg-slate-800 rounded-2xl text-sm font-bold border-none outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 text-slate-400">SKU Code</label>
+                    <input 
+                      type="text" 
+                      value={productForm.sku}
+                      onChange={(e) => setProductForm({...productForm, sku: e.target.value})}
+                      className="w-full p-4 bg-slate-50 dark:bg-slate-800 rounded-2xl text-sm font-bold border-none outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
+                    />
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-6">
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 text-slate-400">Category</label>
+                    <select 
+                      value={productForm.cat}
+                      onChange={(e) => setProductForm({...productForm, cat: e.target.value})}
+                      className="w-full p-4 bg-slate-50 dark:bg-slate-800 rounded-2xl text-sm font-bold border-none outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
+                    >
+                      <option>Drinks</option>
+                      <option>Groceries</option>
+                      <option>Stationery</option>
+                      <option>Electronics</option>
+                      <option>Health</option>
+                    </select>
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 text-slate-400">Retail Price</label>
+                    <input 
+                      type="number" 
+                      value={productForm.price}
+                      onChange={(e) => setProductForm({...productForm, price: parseFloat(e.target.value)})}
+                      className="w-full p-4 bg-slate-50 dark:bg-slate-800 rounded-2xl text-sm font-bold border-none outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
+                    />
+                  </div>
+                </div>
+                <div className="grid grid-cols-3 gap-6">
+                   <div className="space-y-1">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 text-slate-400">Stock</label>
+                    <input 
+                      type="number" 
+                      value={productForm.stock}
+                      onChange={(e) => setProductForm({...productForm, stock: parseInt(e.target.value)})}
+                      className="w-full p-4 bg-slate-50 dark:bg-slate-800 rounded-2xl text-sm font-bold border-none outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 text-slate-400">Threshold</label>
+                    <input 
+                      type="number" 
+                      value={productForm.threshold}
+                      onChange={(e) => setProductForm({...productForm, threshold: parseInt(e.target.value)})}
+                      className="w-full p-4 bg-slate-50 dark:bg-slate-800 rounded-2xl text-sm font-bold border-none outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 text-slate-400">Velocity</label>
+                    <input 
+                      type="number" 
+                      step="0.1"
+                      value={productForm.dailyVelocity}
+                      onChange={(e) => setProductForm({...productForm, dailyVelocity: parseFloat(e.target.value)})}
+                      className="w-full p-4 bg-slate-50 dark:bg-slate-800 rounded-2xl text-sm font-bold border-none outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="p-8 bg-slate-50 dark:bg-slate-800/50 flex gap-4">
+                <button 
+                  onClick={() => setIsProductModalOpen(false)}
+                  className="flex-1 py-4 bg-white dark:bg-slate-700 text-slate-700 dark:text-white rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-slate-100 transition-all border border-slate-200 dark:border-slate-600"
+                >
+                  Cancel
+                </button>
+                <button 
+                  onClick={handleAddProduct}
+                  className="flex-[2] py-4 bg-blue-600 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-lg shadow-blue-500/20 hover:bg-blue-700 transition-all"
+                >
+                  {editingProductId ? 'Update Item' : 'Add to Catalog'}
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Supplier Modal */}
+      <AnimatePresence>
+        {isSupplierModalOpen && selectedSupplierState && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setIsSupplierModalOpen(false)}
+              className="absolute inset-0 bg-slate-900/60 backdrop-blur-md"
+            />
+            <motion.div 
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="relative w-full max-w-2xl bg-white dark:bg-slate-900 rounded-[2.5rem] shadow-2xl overflow-hidden"
+            >
+              <div className="flex flex-col md:flex-row divide-x divide-slate-100 dark:divide-slate-800">
+                <div className="p-10 flex-1 space-y-8">
+                  <div className="flex items-center gap-5">
+                    <div className="w-20 h-20 bg-slate-900 text-white rounded-[2rem] flex items-center justify-center text-4xl font-black">
+                      {selectedSupplierState.name[0]}
+                    </div>
+                    <div>
+                      <h3 className="text-2xl font-black text-slate-900 dark:text-white tracking-tight">{selectedSupplierState.name}</h3>
+                      <p className="text-xs font-black text-blue-600 uppercase tracking-widest">{selectedSupplierState.cat} Specialist</p>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="p-5 bg-slate-50 dark:bg-slate-800 rounded-3xl space-y-1 transition-colors">
+                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Contact Person</p>
+                      <p className="text-sm font-bold text-slate-900 dark:text-white">{selectedSupplierState.contact}</p>
+                    </div>
+                    <div className="p-5 bg-slate-50 dark:bg-slate-800 rounded-3xl space-y-1 transition-colors">
+                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Phone</p>
+                      <p className="text-sm font-bold text-slate-900 dark:text-white">{selectedSupplierState.phone}</p>
+                    </div>
+                  </div>
+
+                  <div className="p-5 bg-blue-50 dark:bg-blue-900/20 rounded-3xl border border-blue-100 dark:border-blue-800 space-y-1 transition-colors">
+                    <p className="text-[10px] font-black text-blue-400 uppercase tracking-widest">Official Email</p>
+                    <p className="text-sm font-bold text-blue-700 dark:text-blue-300">{selectedSupplierState.email}</p>
+                  </div>
+                </div>
+
+                <div className="bg-slate-50/50 dark:bg-slate-800/20 p-10 w-full md:w-72 space-y-6">
+                   <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest">Recent Activity</h4>
+                   <div className="space-y-4">
+                      {purchaseOrders.filter(o => o.supplier === selectedSupplierState.name).slice(0, 3).map((po, idx) => (
+                        <div key={idx} className="p-4 bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800 transition-colors">
+                          <p className="text-[10px] font-black text-slate-900 dark:text-white uppercase tracking-tight">{po.id}</p>
+                          <p className="text-[9px] text-slate-400 font-bold mt-1">GHS {po.total.toLocaleString()} • {po.status}</p>
+                        </div>
+                      ))}
+                      {purchaseOrders.filter(o => o.supplier === selectedSupplierState.name).length === 0 && (
+                        <div className="text-center py-10 opacity-20 flex flex-col items-center text-slate-400">
+                           <FileText size={40} className="mb-2" />
+                           <p className="text-[10px] font-black uppercase">No History</p>
+                        </div>
+                      )}
+                   </div>
+                   <button 
+                    onClick={() => setIsSupplierModalOpen(false)}
+                    className="w-full py-4 bg-slate-900 dark:bg-white text-white dark:text-slate-900 rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-xl shadow-slate-900/10 hover:translate-y-[-2px] transition-all"
+                   >
+                     Close Portal
+                   </button>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-6">
         <div>
           <h2 className="text-3xl font-black text-slate-900 dark:text-white tracking-tight transition-colors">Supply Chain & Stock</h2>
@@ -553,11 +829,20 @@ export default function InventoryManager() {
                     <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500" size={18} />
                     <input 
                       type="text" 
+                      value={productSearch}
+                      onChange={(e) => setProductSearch(e.target.value)}
                       placeholder="Filter by SKU, Name or Category..." 
                       className="w-full bg-slate-50 dark:bg-slate-800 dark:text-white h-12 pl-12 pr-4 rounded-2xl text-sm border-none outline-none focus:ring-2 focus:ring-blue-100 dark:focus:ring-blue-900/40 transition-colors"
                     />
                   </div>
-                  <button className="p-3 bg-blue-600 text-white rounded-2xl shadow-lg shadow-blue-500/20 hover:bg-blue-700 transition-all">
+                  <button 
+                    onClick={() => {
+                      setEditingProductId(null);
+                      setProductForm({ name: '', sku: '', cat: 'Drinks', price: 0, stock: 0, threshold: 0, dailyVelocity: 0.1 });
+                      setIsProductModalOpen(true);
+                    }}
+                    className="p-3 bg-blue-600 text-white rounded-2xl shadow-lg shadow-blue-500/20 hover:bg-blue-700 transition-all"
+                  >
                     <Plus size={20} />
                   </button>
                </div>
@@ -578,7 +863,12 @@ export default function InventoryManager() {
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-50 dark:divide-slate-800">
-                            {products.map((p, i) => {
+                            {products
+                              .filter(p => p.name.toLowerCase().includes(productSearch.toLowerCase()) || 
+                                          p.sku.toLowerCase().includes(productSearch.toLowerCase()) ||
+                                          p.cat.toLowerCase().includes(productSearch.toLowerCase())
+                              )
+                              .map((p, i) => {
                                 const isLow = p.stock <= p.threshold;
                                 // Reorder point = velocity * 7 (weekly lead time) + threshold
                                 const reorderPoint = Math.ceil(p.dailyVelocity * 7 + p.threshold);
@@ -629,7 +919,10 @@ export default function InventoryManager() {
                                             )}
                                         </td>
                                         <td className="px-8 py-6 text-right">
-                                            <button className="text-slate-300 dark:text-slate-700 hover:text-blue-600 dark:hover:text-blue-400 transition-colors">
+                                            <button 
+                                              onClick={() => handleEditProduct(p)}
+                                              className="text-slate-300 dark:text-slate-700 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
+                                            >
                                                 <MoreVertical size={18} />
                                             </button>
                                         </td>
@@ -680,7 +973,13 @@ export default function InventoryManager() {
                         </div>
                    </div>
 
-                   <button className="w-full mt-10 py-4 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-300 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-slate-50 dark:hover:bg-slate-800 transition-all flex items-center justify-center gap-2">
+                   <button 
+                    onClick={() => {
+                      setSelectedSupplierState(s);
+                      setIsSupplierModalOpen(true);
+                    }}
+                    className="w-full mt-10 py-4 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-300 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-slate-50 dark:hover:bg-slate-800 transition-all flex items-center justify-center gap-2"
+                   >
                         View Fulfillment History <ChevronRight size={14} />
                    </button>
                 </div>
@@ -702,10 +1001,30 @@ export default function InventoryManager() {
              exit={{ opacity: 0, x: -20 }}
              className="space-y-6"
            >
-             <div className="flex justify-end">
+             <div className="flex flex-col md:flex-row justify-between items-center gap-4">
+                <div className="bg-slate-100 dark:bg-slate-800 p-1.5 rounded-2xl flex gap-1 w-full md:w-auto transition-colors">
+                    {['all', 'pending', 'received'].map(status => (
+                      <button
+                        key={status}
+                        onClick={() => setPoStatusFilter(status as any)}
+                        className={`px-6 py-2 rounded-xl text-[10px] font-black uppercase tracking-[0.1em] transition-all flex-1 md:flex-none ${
+                          poStatusFilter === status 
+                            ? 'bg-white dark:bg-slate-700 text-blue-600 dark:text-blue-400 shadow-sm' 
+                            : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'
+                        }`}
+                      >
+                        {status}
+                      </button>
+                    ))}
+                </div>
                 <button 
-                  onClick={() => setIsModalOpen(true)}
-                  className="flex items-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-blue-700 transition-all shadow-lg shadow-blue-500/20"
+                  onClick={() => {
+                    setEditingPOId(null);
+                    setOrderItems([]);
+                    setSelectedSupplierId('');
+                    setIsModalOpen(true);
+                  }}
+                  className="flex items-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-blue-700 transition-all shadow-lg shadow-blue-500/20 w-full md:w-auto justify-center"
                 >
                     <Plus size={16} /> New Order
                 </button>
@@ -723,7 +1042,9 @@ export default function InventoryManager() {
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-50 dark:divide-slate-800">
-                        {purchaseOrders.map(o => (
+                        {purchaseOrders
+                          .filter(o => poStatusFilter === 'all' || o.status === poStatusFilter)
+                          .map(o => (
                             <tr key={o.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors group">
                                 <td className="px-8 py-6">
                                     <p className="font-black text-slate-900 dark:text-white transition-colors">{o.id}</p>
@@ -747,8 +1068,9 @@ export default function InventoryManager() {
                                     </span>
                                 </td>
                                 <td className="px-8 py-6 text-right">
+                                  <div className="flex items-center justify-end gap-2">
                                     {o.status === 'pending' && (
-                                      <div className="flex items-center justify-end gap-2">
+                                      <>
                                         <button 
                                           onClick={() => handleReceiveOrder(o.id)}
                                           className="p-2 hover:bg-teal-50 dark:hover:bg-teal-900/30 rounded-lg text-teal-600 transition-colors group relative"
@@ -757,19 +1079,27 @@ export default function InventoryManager() {
                                             <Check size={18} />
                                         </button>
                                         <button 
+                                          onClick={() => handleEditPO(o)}
+                                          className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg text-slate-400 hover:text-blue-600 transition-colors group relative"
+                                          title="Edit Order"
+                                        >
+                                            <MoreVertical size={18} />
+                                        </button>
+                                        <button 
                                           onClick={() => generateEmailPreview(o)}
                                           className="p-2 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded-lg text-blue-500 transition-colors group relative"
                                           title="Email to Supplier"
                                         >
                                             <Mail size={18} />
                                         </button>
-                                      </div>
+                                      </>
                                     )}
                                     {o.status === 'received' && (
                                       <button className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg text-slate-400 dark:text-slate-600 hover:text-blue-600 dark:hover:text-blue-400 transition-colors">
                                           <FileText size={18} />
                                       </button>
                                     )}
+                                  </div>
                                 </td>
                             </tr>
                         ))}
