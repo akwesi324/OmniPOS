@@ -221,8 +221,8 @@ export default function App() {
                        </div>
                        <div className="flex items-center justify-between p-4 bg-gray-50 dark:bg-slate-800 rounded-2xl transition-colors">
                           <div className="flex items-center gap-3">
-                            <div className="w-8 h-8 bg-orange-600 rounded-full" />
-                            <span className="font-bold text-sm dark:text-slate-200">Hubtel</span>
+                            <div className="w-8 h-8 bg-orange-500 rounded-full flex items-center justify-center text-white text-[8px] font-black">FLW</div>
+                            <span className="font-bold text-sm dark:text-slate-200">Flutterwave</span>
                           </div>
                           <span className="text-xs font-black text-gray-400 dark:text-slate-500 uppercase tracking-widest">Required Config</span>
                        </div>

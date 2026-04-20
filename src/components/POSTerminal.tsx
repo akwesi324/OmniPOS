@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { 
   Plus, 
   Trash2, 
@@ -6,13 +6,17 @@ import {
   Banknote, 
   Smartphone, 
   Search,
-  ShoppingCart as CartIcon
+  ShoppingCart as CartIcon,
+  CheckCircle2,
+  Loader2
 } from 'lucide-react';
-import { motion } from 'motion/react';
+import { motion, AnimatePresence } from 'motion/react';
 
 export default function POSTerminal() {
   const [cart, setCart] = useState<any[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
+  const [paymentStatus, setPaymentStatus] = useState<'idle' | 'processing' | 'success'>('idle');
+  const [activeProvider, setActiveProvider] = useState<string | null>(null);
 
   const products = [
     { id: '1', name: 'Coffee Latte', price: 25.5, category: 'Drinks' },
@@ -33,10 +37,80 @@ export default function POSTerminal() {
     });
   };
 
+  const handlePayment = (provider: string) => {
+    if (cart.length === 0) return;
+    setActiveProvider(provider);
+    setPaymentStatus('processing');
+    
+    // Simulate API call delay
+    setTimeout(() => {
+      setPaymentStatus('success');
+      setTimeout(() => {
+        setPaymentStatus('idle');
+        setCart([]);
+        setActiveProvider(null);
+      }, 3000);
+    }, 2500);
+  };
+
   const total = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
 
   return (
-    <div className="flex h-full gap-6 overflow-hidden">
+    <div className="relative flex h-full gap-6 overflow-hidden">
+      {/* Payment Overlay */}
+      <AnimatePresence>
+        {paymentStatus !== 'idle' && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="absolute inset-0 z-50 flex items-center justify-center bg-slate-900/90 backdrop-blur-sm"
+          >
+            <motion.div 
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              className="bg-white dark:bg-slate-900 p-8 rounded-3xl shadow-2xl text-center max-w-sm w-full mx-4"
+            >
+              {paymentStatus === 'processing' ? (
+                <div className="space-y-6">
+                  <div className="flex justify-center">
+                    <Loader2 size={64} className="text-blue-600 animate-spin" />
+                  </div>
+                  <div className="space-y-2">
+                    <h3 className="text-xl font-bold text-slate-900 dark:text-white">Connecting to {activeProvider}</h3>
+                    <p className="text-sm text-slate-500">Please authorize the prompt on your phone...</p>
+                  </div>
+                  <div className="pt-4 border-t border-slate-100 dark:border-slate-800">
+                    <p className="text-xs font-black uppercase tracking-widest text-blue-600">GHS {total.toFixed(2)}</p>
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-6">
+                  <div className="flex justify-center">
+                    <motion.div
+                      initial={{ scale: 0 }}
+                      animate={{ scale: 1 }}
+                      transition={{ type: "spring", damping: 12 }}
+                    >
+                      <CheckCircle2 size={64} className="text-green-500" />
+                    </motion.div>
+                  </div>
+                  <div className="space-y-2">
+                    <h3 className="text-xl font-bold text-slate-900 dark:text-white">Payment Successful</h3>
+                    <p className="text-sm text-slate-500">Transaction ID: FLW-{Math.random().toString(36).substring(7).toUpperCase()}</p>
+                  </div>
+                  <button 
+                    onClick={() => setPaymentStatus('idle')}
+                    className="w-full py-3 bg-slate-900 dark:bg-white text-white dark:text-black rounded-xl font-bold text-sm"
+                  >
+                    Close & Start New Sale
+                  </button>
+                </div>
+              )}
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
       {/* Product Area */}
       <div className="flex-1 flex flex-col min-h-0">
         <div className="flex gap-2 mb-6 shrink-0 overflow-x-auto pb-2 custom-scrollbar">
@@ -129,15 +203,27 @@ export default function POSTerminal() {
         </div>
 
         <div className="p-5 bg-slate-50 dark:bg-slate-900 border-t border-slate-100 dark:border-slate-800 flex flex-col gap-3 shrink-0">
-          <button className="w-full py-4 bg-blue-600 text-white rounded-xl text-[10px] font-black uppercase tracking-[0.2em] flex items-center justify-center gap-2 shadow-lg shadow-blue-500/20 hover:bg-blue-700 transition-all active:scale-[0.98]">
+          <button 
+            onClick={() => handlePayment('Paystack')}
+            className="w-full py-4 bg-blue-600 text-white rounded-xl text-[10px] font-black uppercase tracking-[0.2em] flex items-center justify-center gap-2 shadow-lg shadow-blue-500/20 hover:bg-blue-700 transition-all active:scale-[0.98]"
+          >
             <CreditCard size={16} />
             Paystack
           </button>
-          <button className="w-full py-4 bg-teal-600 text-white rounded-xl text-[10px] font-black uppercase tracking-[0.2em] flex items-center justify-center gap-2 shadow-lg shadow-teal-500/20 hover:bg-teal-700 transition-all active:scale-[0.98]">
+          <button 
+            onClick={() => handlePayment('Flutterwave')}
+            className="w-full py-4 bg-orange-500 text-white rounded-xl text-[10px] font-black uppercase tracking-[0.2em] flex items-center justify-center gap-2 shadow-lg shadow-orange-500/20 hover:bg-orange-600 transition-all active:scale-[0.98]"
+          >
             <Smartphone size={16} />
-            Hubtel
+            Flutterwave
           </button>
-          <button className="w-full py-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 rounded-xl text-[10px] font-black uppercase tracking-[0.2em] hover:bg-slate-100 dark:hover:bg-slate-700 transition-all">
+          <button 
+            onClick={() => {
+              setCart([]);
+              alert('Cash payment recorded.');
+            }}
+            className="w-full py-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 rounded-xl text-[10px] font-black uppercase tracking-[0.2em] hover:bg-slate-100 dark:hover:bg-slate-700 transition-all"
+          >
             Cash Out
           </button>
         </div>

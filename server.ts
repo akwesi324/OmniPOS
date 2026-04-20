@@ -43,22 +43,22 @@ async function startServer() {
     }
   });
 
-  // Hubtel Integration Placeholder
-  app.post('/api/payments/hubtel/request', async (req, res) => {
-    const { amount, phone, itemId } = req.body;
-    // Real implementation would call Hubtel API
-    // Using process.env.HUBTEL_CLIENT_ID, process.env.HUBTEL_CLIENT_SECRET
+  // Flutterwave Integration Placeholder
+  app.post('/api/payments/flutterwave/initialize', async (req, res) => {
+    const { amount, email, phone, currency } = req.body;
+    // Real implementation would call Flutterwave API
+    // Using process.env.FLW_SECRET_KEY
     try {
-      const clientReference = uuidv4();
+      const tx_ref = uuidv4();
       res.json({
-        status: 'Success',
+        status: 'success',
         data: {
-          clientReference: clientReference,
-          transactionId: 'simulated_hubtel_tx'
+          link: 'https://checkout.flutterwave.com/' + tx_ref,
+          tx_ref: tx_ref
         }
       });
     } catch (error) {
-      res.status(500).json({ status: 'Error', message: 'Hubtel request failed' });
+      res.status(500).json({ status: 'error', message: 'Flutterwave initialization failed' });
     }
   });
 
