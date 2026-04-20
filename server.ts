@@ -24,9 +24,12 @@ async function startServer() {
 
   // Paystack Initialization
   app.post('/api/payments/paystack/initialize', async (req, res) => {
-    const { email, amount, metadata } = req.body;
+    const { email, amount, metadata, phone, channel } = req.body;
     try {
       const reference = `pstk_ref_${uuidv4()}`;
+      if (channel === 'mobile_money') {
+        console.log(`[Paystack] Mobile Money payment initiated for ${phone}. OTP simulated.`);
+      }
       res.json({
         status: true,
         data: {
@@ -86,11 +89,12 @@ async function startServer() {
 
   // Flutterwave Initialization
   app.post('/api/payments/flutterwave/initialize', async (req, res) => {
-    const { amount, email, phone, currency } = req.body;
+    const { amount, email, phone, currency, channel } = req.body;
     try {
       const tx_ref = `flw_tx_ref_${uuidv4()}`;
-      // In a real implementation:
-      // const response = await axios.post('https://api.flutterwave.com/v3/payments', { ... }, { headers: { Authorization: `Bearer ${process.env.FLW_SECRET_KEY}` } });
+      if (channel === 'mobile_money') {
+        console.log(`[Flutterwave] MTN Mobile Money payment initiated for ${phone}. OTP simulated.`);
+      }
       res.json({
         status: 'success',
         data: {

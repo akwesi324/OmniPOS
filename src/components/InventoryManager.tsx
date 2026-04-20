@@ -17,12 +17,17 @@ import {
   Check,
   Mail,
   Send,
-  Loader2
+  Loader2,
+  BarChart3,
+  Calendar,
+  Zap,
+  Star,
+  History
 } from 'lucide-react';
 import { GoogleGenAI } from "@google/genai";
 import { motion, AnimatePresence } from 'motion/react';
 
-type SubTab = 'products' | 'suppliers' | 'orders';
+type SubTab = 'products' | 'suppliers' | 'orders' | 'reports';
 
 interface POItem {
   productId: string;
@@ -41,6 +46,16 @@ interface PurchaseOrder {
   items: POItem[];
 }
 
+interface Supplier {
+  id: string;
+  name: string;
+  contact: string;
+  phone: string;
+  email: string;
+  cat: string;
+  address?: string;
+}
+
 export default function InventoryManager() {
   const [activeSubTab, setActiveSubTab] = useState<SubTab>('products');
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -54,12 +69,18 @@ export default function InventoryManager() {
   });
 
   // Supplier details states
-  const [selectedSupplierState, setSelectedSupplierState] = useState<any | null>(null);
+  const [selectedSupplierState, setSelectedSupplierState] = useState<Supplier | null>(null);
   const [isSupplierModalOpen, setIsSupplierModalOpen] = useState(false);
+  const [isEditingSupplier, setIsEditingSupplier] = useState(false);
+  const [supplierForm, setSupplierForm] = useState<Partial<Supplier>>({});
 
   // Filtering states
   const [poStatusFilter, setPoStatusFilter] = useState<'all' | 'pending' | 'received'>('all');
   const [productSearch, setProductSearch] = useState('');
+  
+  // Real-time Holiday Discounts
+  const [activeHoliday, setActiveHoliday] = useState<{name: string, discount: number} | null>(null);
+  const [isHolidayModalOpen, setIsHolidayModalOpen] = useState(false);
   
   // Email states
   const [isEmailModalOpen, setIsEmailModalOpen] = useState(false);
@@ -79,11 +100,11 @@ export default function InventoryManager() {
     { id: '5', name: 'Hand Sanitizer 1L', sku: 'HLTH-05', cat: 'Health', price: 25.0, stock: 15, threshold: 25, dailyVelocity: 4.8 },
   ]);
 
-  const suppliers = [
-    { id: 's1', name: 'Coca-Cola Bottling Ltd', contact: 'Kofi Manu', phone: '+233 24 000 1111', email: 'orders@coke.gh', cat: 'Beverages' },
-    { id: 's2', name: 'Nestle Ghana', contact: 'Ama Serwaa', phone: '+233 50 222 3333', email: 'sales@nestle.gh', cat: 'Groceries' },
-    { id: 's3', name: 'Kingdom Books', contact: 'Yaw Boateng', phone: '+233 27 444 5555', email: 'biz@kingdom.com', cat: 'Stationery' },
-  ];
+  const [suppliers, setSuppliers] = useState<Supplier[]>([
+    { id: 's1', name: 'Coca-Cola Bottling Ltd', contact: 'Kofi Manu', phone: '+233 24 000 1111', email: 'orders@coke.gh', cat: 'Beverages', address: 'Plot 24, Industrial Area, North Ridge, Accra' },
+    { id: 's2', name: 'Nestle Ghana', contact: 'Ama Serwaa', phone: '+233 50 222 3333', email: 'sales@nestle.gh', cat: 'Groceries', address: 'Motorway Extension, Tema Industrial Estate, Tema' },
+    { id: 's3', name: 'Kingdom Books', contact: 'Yaw Boateng', phone: '+233 27 444 5555', email: 'biz@kingdom.com', cat: 'Stationery', address: 'Osu Crescent, behind Danquah Circle, Osu, Accra' },
+  ]);
 
   const [purchaseOrders, setPurchaseOrders] = useState<PurchaseOrder[]>([
     { 
@@ -91,24 +112,58 @@ export default function InventoryManager() {
       supplier: 'Nestle Ghana', 
       supplierEmail: 'sales@nestle.gh',
       date: '2026-04-18', 
-      status: 'pending', 
+      status: 'received', 
       total: 4200,
       items: [
         { productId: '2', name: 'Milo 400g Tray', quantity: 50, costPrice: 84.0 }
       ]
     },
     { 
-      id: 'PO-8820', 
-      supplier: 'Kingdom Books', 
-      supplierEmail: 'biz@kingdom.com',
-      date: '2026-04-15', 
-      status: 'received', 
-      total: 1500,
+      id: 'PO-8822', 
+      supplier: 'Coca-Cola Bottling Ltd', 
+      supplierEmail: 'orders@coke.gh',
+      date: '2026-04-19', 
+      status: 'pending', 
+      total: 1200,
       items: [
-        { productId: '3', name: 'A4 Paper (Ream)', quantity: 33, costPrice: 45.45 }
+        { productId: '1', name: 'Coca Cola 500ml', quantity: 100, costPrice: 12.0 }
       ]
-    },
+    }
   ]);
+
+  // Performance Calculations
+  const supplierPerformance = useMemo(() => {
+    return suppliers.map(s => {
+      const sOrders = purchaseOrders.filter(o => o.supplier === s.name);
+      const totalSpend = sOrders.reduce((sum, o) => sum + o.total, 0);
+      const receivedCount = sOrders.filter(o => o.status === 'received').length;
+      const reliability = sOrders.length > 0 ? (receivedCount / sOrders.length) * 100 : 0;
+      
+      return {
+        ...s,
+        totalSpend,
+        orderCount: sOrders.length,
+        reliability: reliability.toFixed(1)
+      };
+    }).sort((a, b) => b.totalSpend - a.totalSpend);
+  }, [suppliers, purchaseOrders]);
+
+  // Real-time Pricing Logic
+  const discountedProducts = useMemo(() => {
+    return products.map(p => {
+      const discount = activeHoliday ? activeHoliday.discount : 0;
+      return {
+        ...p,
+        originalPrice: p.price,
+        currentPrice: p.price * (1 - discount / 100)
+      };
+    });
+  }, [products, activeHoliday]);
+  
+  // Order History Sorting
+  const sortedPurchaseOrders = useMemo(() => {
+    return [...purchaseOrders].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  }, [purchaseOrders]);
 
   const addToOrder = (productId: string) => {
     const product = products.find(p => p.id === productId);
@@ -195,6 +250,19 @@ export default function InventoryManager() {
     setEditingProductId(p.id);
     setProductForm({ ...p });
     setIsProductModalOpen(true);
+  };
+
+  const handleEditSupplier = (s: Supplier) => {
+    setSupplierForm({ ...s });
+    setIsEditingSupplier(true);
+  };
+
+  const handleSaveSupplier = () => {
+    if (!supplierForm.id) return;
+    const updatedSuppliers = suppliers.map(s => s.id === supplierForm.id ? supplierForm as Supplier : s);
+    setSuppliers(updatedSuppliers);
+    setSelectedSupplierState(supplierForm as Supplier);
+    setIsEditingSupplier(false);
   };
 
   const generateEmailPreview = async (po: PurchaseOrder) => {
@@ -702,61 +770,213 @@ export default function InventoryManager() {
             >
               <div className="flex flex-col md:flex-row divide-x divide-slate-100 dark:divide-slate-800">
                 <div className="p-10 flex-1 space-y-8">
-                  <div className="flex items-center gap-5">
-                    <div className="w-20 h-20 bg-slate-900 text-white rounded-[2rem] flex items-center justify-center text-4xl font-black">
-                      {selectedSupplierState.name[0]}
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-5">
+                      <div className="w-16 h-16 bg-slate-900 text-white rounded-[1.5rem] flex items-center justify-center text-3xl font-black">
+                        {selectedSupplierState.name[0]}
+                      </div>
+                      <div>
+                        {isEditingSupplier ? (
+                          <input 
+                            value={supplierForm.name}
+                            onChange={(e) => setSupplierForm({...supplierForm, name: e.target.value})}
+                            className="text-xl font-black bg-slate-50 dark:bg-slate-800 border-none rounded-xl p-2 w-full outline-none focus:ring-2 focus:ring-blue-500"
+                          />
+                        ) : (
+                          <h3 className="text-2xl font-black text-slate-900 dark:text-white tracking-tight">{selectedSupplierState.name}</h3>
+                        )}
+                        <p className="text-[10px] font-black text-blue-600 uppercase tracking-widest mt-1">{selectedSupplierState.cat} Specialist</p>
+                      </div>
                     </div>
-                    <div>
-                      <h3 className="text-2xl font-black text-slate-900 dark:text-white tracking-tight">{selectedSupplierState.name}</h3>
-                      <p className="text-xs font-black text-blue-600 uppercase tracking-widest">{selectedSupplierState.cat} Specialist</p>
-                    </div>
+                    {!isEditingSupplier && (
+                      <button 
+                        onClick={() => handleEditSupplier(selectedSupplierState)}
+                        className="p-3 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 rounded-2xl hover:bg-blue-500 hover:text-white transition-all"
+                      >
+                        <Plus size={18} className="rotate-45" /> {/* Using Plus rotated as placeholder for an edit-like icon or just MoreVertical */}
+                        {/* Actually let's use MoreVertical or just a label */}
+                        <span className="text-[10px] font-black uppercase tracking-widest ml-1">Edit</span>
+                      </button>
+                    )}
                   </div>
 
                   <div className="grid grid-cols-2 gap-4">
-                    <div className="p-5 bg-slate-50 dark:bg-slate-800 rounded-3xl space-y-1 transition-colors">
+                    <div className="p-5 bg-slate-50 dark:bg-slate-800 rounded-3xl space-y-1 transition-colors hover:ring-1 hover:ring-blue-500/30">
                       <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Contact Person</p>
-                      <p className="text-sm font-bold text-slate-900 dark:text-white">{selectedSupplierState.contact}</p>
+                      {isEditingSupplier ? (
+                        <input 
+                          value={supplierForm.contact}
+                          onChange={(e) => setSupplierForm({...supplierForm, contact: e.target.value})}
+                          className="text-sm font-bold bg-white dark:bg-slate-700 border-none rounded-lg p-1 w-full outline-none focus:ring-2 focus:ring-blue-500"
+                        />
+                      ) : (
+                        <p className="text-sm font-bold text-slate-900 dark:text-white">{selectedSupplierState.contact}</p>
+                      )}
                     </div>
-                    <div className="p-5 bg-slate-50 dark:bg-slate-800 rounded-3xl space-y-1 transition-colors">
+                    <div className="p-5 bg-slate-50 dark:bg-slate-800 rounded-3xl space-y-1 transition-colors hover:ring-1 hover:ring-blue-500/30">
                       <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Phone</p>
-                      <p className="text-sm font-bold text-slate-900 dark:text-white">{selectedSupplierState.phone}</p>
+                      {isEditingSupplier ? (
+                        <input 
+                          value={supplierForm.phone}
+                          onChange={(e) => setSupplierForm({...supplierForm, phone: e.target.value})}
+                          className="text-sm font-bold bg-white dark:bg-slate-700 border-none rounded-lg p-1 w-full outline-none focus:ring-2 focus:ring-blue-500"
+                        />
+                      ) : (
+                        <p className="text-sm font-bold text-slate-900 dark:text-white">{selectedSupplierState.phone}</p>
+                      )}
                     </div>
                   </div>
 
-                  <div className="p-5 bg-blue-50 dark:bg-blue-900/20 rounded-3xl border border-blue-100 dark:border-blue-800 space-y-1 transition-colors">
+                  <div className="p-5 bg-blue-50 dark:bg-blue-900/20 rounded-3xl border border-blue-100 dark:border-blue-800 space-y-1 transition-colors hover:ring-1 hover:ring-blue-500/30">
                     <p className="text-[10px] font-black text-blue-400 uppercase tracking-widest">Official Email</p>
-                    <p className="text-sm font-bold text-blue-700 dark:text-blue-300">{selectedSupplierState.email}</p>
+                    {isEditingSupplier ? (
+                        <input 
+                          value={supplierForm.email}
+                          onChange={(e) => setSupplierForm({...supplierForm, email: e.target.value})}
+                          className="text-sm font-bold bg-white dark:bg-blue-700/50 border-none rounded-lg p-1 w-full outline-none focus:ring-2 focus:ring-blue-500"
+                        />
+                      ) : (
+                        <p className="text-sm font-bold text-blue-700 dark:text-blue-300">{selectedSupplierState.email}</p>
+                      )}
+                  </div>
+
+                  <div className="p-5 bg-slate-50 dark:bg-slate-800 rounded-3xl space-y-1 transition-colors hover:ring-1 hover:ring-blue-500/30">
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Office Address</p>
+                    {isEditingSupplier ? (
+                        <textarea 
+                          value={supplierForm.address}
+                          onChange={(e) => setSupplierForm({...supplierForm, address: e.target.value})}
+                          rows={2}
+                          className="text-sm font-bold bg-white dark:bg-slate-700 border-none rounded-lg p-1 w-full outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+                        />
+                      ) : (
+                        <p className="text-sm font-bold text-slate-900 dark:text-white leading-relaxed">{selectedSupplierState.address || 'Not Provided'}</p>
+                      )}
                   </div>
                 </div>
 
-                <div className="bg-slate-50/50 dark:bg-slate-800/20 p-10 w-full md:w-72 space-y-6">
-                   <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest">Recent Activity</h4>
-                   <div className="space-y-4">
-                      {purchaseOrders.filter(o => o.supplier === selectedSupplierState.name).slice(0, 3).map((po, idx) => (
-                        <div key={idx} className="p-4 bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800 transition-colors">
-                          <p className="text-[10px] font-black text-slate-900 dark:text-white uppercase tracking-tight">{po.id}</p>
-                          <p className="text-[9px] text-slate-400 font-bold mt-1">GHS {po.total.toLocaleString()} • {po.status}</p>
-                        </div>
-                      ))}
-                      {purchaseOrders.filter(o => o.supplier === selectedSupplierState.name).length === 0 && (
-                        <div className="text-center py-10 opacity-20 flex flex-col items-center text-slate-400">
-                           <FileText size={40} className="mb-2" />
-                           <p className="text-[10px] font-black uppercase">No History</p>
-                        </div>
+                <div className="bg-slate-50/50 dark:bg-slate-800/20 p-10 w-full md:w-72 space-y-6 flex flex-col">
+                   <div className="flex-1 space-y-6">
+                      <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest">Recent Activity</h4>
+                      <div className="space-y-4">
+                          {purchaseOrders.filter(o => o.supplier === selectedSupplierState.name).slice(0, 3).map((po, idx) => (
+                            <div key={idx} className="p-4 bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800 transition-colors">
+                              <p className="text-[10px] font-black text-slate-900 dark:text-white uppercase tracking-tight">{po.id}</p>
+                              <p className="text-[9px] text-slate-400 font-bold mt-1">GHS {po.total.toLocaleString()} • {po.status}</p>
+                            </div>
+                          ))}
+                          {purchaseOrders.filter(o => o.supplier === selectedSupplierState.name).length === 0 && (
+                            <div className="text-center py-10 opacity-20 flex flex-col items-center text-slate-400">
+                              <FileText size={40} className="mb-2" />
+                              <p className="text-[10px] font-black uppercase">No History</p>
+                            </div>
+                          )}
+                      </div>
+                   </div>
+
+                   <div className="space-y-3">
+                      {isEditingSupplier ? (
+                        <>
+                          <button 
+                            onClick={handleSaveSupplier}
+                            className="w-full py-4 bg-blue-600 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-xl shadow-blue-500/20 hover:bg-blue-700 transition-all flex items-center justify-center gap-2"
+                          >
+                            <Check size={14} /> Save Portal
+                          </button>
+                          <button 
+                            onClick={() => setIsEditingSupplier(false)}
+                            className="w-full py-2 text-[10px] font-black text-slate-400 uppercase tracking-widest hover:text-red-500 transition-all"
+                          >
+                            Cancel Changes
+                          </button>
+                        </>
+                      ) : (
+                        <button 
+                          onClick={() => setIsSupplierModalOpen(false)}
+                          className="w-full py-4 bg-slate-900 dark:bg-white text-white dark:text-slate-900 rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-xl shadow-slate-900/10 hover:translate-y-[-2px] transition-all"
+                        >
+                          Close Portal
+                        </button>
                       )}
                    </div>
-                   <button 
-                    onClick={() => setIsSupplierModalOpen(false)}
-                    className="w-full py-4 bg-slate-900 dark:bg-white text-white dark:text-slate-900 rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-xl shadow-slate-900/10 hover:translate-y-[-2px] transition-all"
-                   >
-                     Close Portal
-                   </button>
                 </div>
               </div>
             </motion.div>
           </div>
         )}
       </AnimatePresence>
+      {/* Holiday Discount Modal */}
+      <AnimatePresence>
+        {isHolidayModalOpen && (
+          <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setIsHolidayModalOpen(false)}
+              className="absolute inset-0 bg-slate-900/60 backdrop-blur-md"
+            />
+            <motion.div 
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="relative w-full max-w-lg bg-white dark:bg-slate-900 rounded-[2.5rem] shadow-2xl overflow-hidden p-10"
+            >
+              <div className="space-y-8">
+                <div className="flex justify-between items-center">
+                  <div className="w-14 h-14 bg-blue-50 dark:bg-blue-900/40 rounded-2xl flex items-center justify-center text-blue-600">
+                    <Zap size={28} />
+                  </div>
+                  <button onClick={() => setIsHolidayModalOpen(false)} className="p-3 text-slate-400 hover:text-slate-600 transition-colors">
+                    <X size={24} />
+                  </button>
+                </div>
+
+                <div className="space-y-2">
+                  <h3 className="text-3xl font-black text-slate-900 dark:text-white tracking-tight">Activate Sale</h3>
+                  <p className="text-slate-500 dark:text-slate-400 font-medium">Define the holiday name and global percentage discount.</p>
+                </div>
+
+                <div className="space-y-6">
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Event Name</label>
+                    <input 
+                      type="text" 
+                      placeholder="e.g. Independence Day"
+                      id="holidayName"
+                      className="w-full bg-slate-50 dark:bg-slate-800 dark:text-white p-4 rounded-2xl border-none outline-none focus:ring-2 focus:ring-blue-500/20 transition-all font-bold"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Percent Discount (%)</label>
+                    <input 
+                      type="number" 
+                      placeholder="e.g. 15"
+                      id="holidayDiscount"
+                      className="w-full bg-slate-50 dark:bg-slate-800 dark:text-white p-4 rounded-2xl border-none outline-none focus:ring-2 focus:ring-blue-500/20 transition-all font-bold"
+                    />
+                  </div>
+                </div>
+
+                <button 
+                  onClick={() => {
+                    const name = (document.getElementById('holidayName') as HTMLInputElement).value;
+                    const discount = parseInt((document.getElementById('holidayDiscount') as HTMLInputElement).value);
+                    if (name && !isNaN(discount)) {
+                      setActiveHoliday({ name, discount });
+                      setIsHolidayModalOpen(false);
+                    }
+                  }}
+                  className="w-full py-5 bg-blue-600 text-white rounded-[1.5rem] font-black uppercase tracking-widest text-xs shadow-xl shadow-blue-500/20 hover:bg-blue-700 transition-all"
+                >
+                  Apply Global Pricing Logic
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-6">
         <div>
           <h2 className="text-3xl font-black text-slate-900 dark:text-white tracking-tight transition-colors">Supply Chain & Stock</h2>
@@ -768,7 +988,8 @@ export default function InventoryManager() {
           {[
             { id: 'products', name: 'Inventory', icon: Package },
             { id: 'suppliers', name: 'Suppliers', icon: Truck },
-            { id: 'orders', name: 'P. Orders', icon: FileText },
+            { id: 'orders', name: 'Order History', icon: History },
+            { id: 'reports', name: 'Reports', icon: BarChart3 },
           ].map(tab => (
             <button
               key={tab.id}
@@ -863,7 +1084,7 @@ export default function InventoryManager() {
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-50 dark:divide-slate-800">
-                            {products
+                            {discountedProducts
                               .filter(p => p.name.toLowerCase().includes(productSearch.toLowerCase()) || 
                                           p.sku.toLowerCase().includes(productSearch.toLowerCase()) ||
                                           p.cat.toLowerCase().includes(productSearch.toLowerCase())
@@ -875,7 +1096,7 @@ export default function InventoryManager() {
                                 const suggestedPO = Math.max(0, reorderPoint - p.stock);
 
                                 return (
-                                    <tr key={i} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors group">
+                                    <tr key={i} className={`hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors group ${isLow ? 'bg-red-50/40 dark:bg-red-900/10' : ''}`}>
                                         <td className="px-8 py-6">
                                             <div className="flex items-center gap-4">
                                                 <div className="w-12 h-12 bg-slate-100 dark:bg-slate-800 rounded-2xl flex items-center justify-center text-slate-400 dark:text-slate-500 font-black relative overflow-hidden transition-colors">
@@ -883,8 +1104,25 @@ export default function InventoryManager() {
                                                     {isLow && <div className="absolute top-0 right-0 w-3 h-3 bg-red-500 border-2 border-slate-100 dark:border-slate-800 rounded-full" />}
                                                 </div>
                                                 <div>
-                                                    <p className="font-bold text-slate-900 dark:text-white leading-tight transition-colors">{p.name}</p>
+                                                    <div className="flex items-center gap-2">
+                                                       <p className="font-bold text-slate-900 dark:text-white leading-tight transition-colors">{p.name}</p>
+                                                       {activeHoliday && (
+                                                          <div className="flex items-center gap-1 px-1.5 py-0.5 bg-blue-500/10 text-blue-500 rounded text-[8px] font-black uppercase tracking-tighter">
+                                                             <Zap size={8} /> sale
+                                                          </div>
+                                                       )}
+                                                    </div>
                                                     <p className="text-[10px] text-slate-400 dark:text-slate-500 font-bold uppercase tracking-widest mt-0.5">{p.sku} • {p.cat}</p>
+                                                    <div className="mt-1 flex items-center gap-2">
+                                                       {activeHoliday ? (
+                                                          <>
+                                                             <span className="text-[10px] line-through text-slate-400 font-bold">GHS {p.originalPrice.toFixed(2)}</span>
+                                                             <span className="text-[11px] text-blue-600 dark:text-blue-400 font-black">GHS {p.currentPrice.toFixed(2)}</span>
+                                                          </>
+                                                       ) : (
+                                                          <span className="text-[10px] text-slate-500 font-bold">GHS {p.price.toFixed(2)}</span>
+                                                       )}
+                                                    </div>
                                                 </div>
                                             </div>
                                         </td>
@@ -895,10 +1133,15 @@ export default function InventoryManager() {
                                             </div>
                                         </td>
                                         <td className="px-8 py-6 text-right">
-                                            <p className={`font-black text-lg tracking-tighter transition-all ${isLow ? 'text-red-500 animate-pulse' : 'text-slate-900 dark:text-white'}`}>
-                                                {p.stock}
-                                            </p>
-                                            <p className="text-[10px] text-slate-400 dark:text-slate-500 font-bold uppercase">UNITS</p>
+                                            <div className="flex flex-col items-end">
+                                               <div className="flex items-center gap-1.5">
+                                                   {isLow && <AlertCircle size={14} className="text-red-500" />}
+                                                   <p className={`font-black text-lg tracking-tighter transition-all ${isLow ? 'text-red-500 animate-pulse' : 'text-slate-900 dark:text-white'}`}>
+                                                       {p.stock}
+                                                   </p>
+                                               </div>
+                                               <p className="text-[10px] text-slate-400 dark:text-slate-500 font-bold uppercase">UNITS</p>
+                                            </div>
                                         </td>
                                         <td className="px-8 py-6 text-center text-slate-400 dark:text-slate-500">
                                             <span className="text-xs font-black font-mono">{reorderPoint}</span>
@@ -993,41 +1236,153 @@ export default function InventoryManager() {
           </motion.div>
         )}
 
+        {activeSubTab === 'reports' && (
+          <motion.div 
+            key="reports"
+            initial={{ opacity: 0, x: 20 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: -20 }}
+            className="space-y-8"
+          >
+            {/* ... holiday discount UI ... */}
+            <div className="bg-slate-900 dark:bg-slate-800 p-8 rounded-[2.5rem] border border-slate-800 shadow-2xl relative overflow-hidden group">
+               <div className="absolute top-0 right-0 p-8 opacity-10 group-hover:rotate-12 transition-transform">
+                  <Zap size={120} className="text-blue-400" />
+               </div>
+               <div className="relative z-10 flex flex-col md:flex-row justify-between items-center gap-8">
+                  <div className="space-y-2 text-center md:text-left">
+                     <h3 className="text-3xl font-black text-white tracking-tight">Holiday Sales Logic</h3>
+                     <p className="text-slate-400 font-bold max-w-md">Apply real-time percentage discounts across your entire catalog for seasonal campaigns.</p>
+                  </div>
+                  <div className="flex flex-col items-center gap-4">
+                     {activeHoliday ? (
+                        <div className="flex flex-col items-center gap-4">
+                           <div className="px-6 py-3 bg-blue-500/20 border border-blue-500/40 rounded-2xl flex items-center gap-3">
+                              <Star size={16} className="text-blue-400 animate-spin-slow" />
+                              <span className="text-white font-black uppercase text-xs tracking-widest">{activeHoliday.name} • {activeHoliday.discount}% OFF</span>
+                           </div>
+                           <button 
+                             onClick={() => setActiveHoliday(null)}
+                             className="text-[10px] font-black text-red-400 uppercase tracking-widest hover:text-red-300 transition-colors"
+                           >
+                              Deactivate Campaign
+                           </button>
+                        </div>
+                     ) : (
+                        <button 
+                          onClick={() => setIsHolidayModalOpen(true)}
+                          className="px-8 py-4 bg-blue-600 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-xl shadow-blue-500/20 hover:bg-blue-700 transition-all flex items-center gap-2"
+                        >
+                           <Calendar size={14} /> Schedule Global Discount
+                        </button>
+                     )}
+                  </div>
+               </div>
+            </div>
+
+            {/* Performance Grid */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+               <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-[2.5rem] p-10 shadow-xl shadow-slate-200/40 dark:shadow-none space-y-8">
+                  <div className="flex justify-between items-center">
+                     <div>
+                        <h4 className="text-lg font-black text-slate-900 dark:text-white tracking-tight">Supplier Reliability</h4>
+                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Calculated by fulfillment success (%)</p>
+                     </div>
+                     <div className="w-12 h-12 bg-slate-50 dark:bg-slate-800 rounded-2xl flex items-center justify-center text-slate-400">
+                        <Truck size={20} />
+                     </div>
+                  </div>
+                  <div className="space-y-6">
+                     {supplierPerformance.map((s, idx) => (
+                        <div key={idx} className="space-y-2">
+                           <div className="flex justify-between items-center text-xs">
+                              <span className="font-bold text-slate-900 dark:text-white">{s.name}</span>
+                              <span className="font-black text-blue-600 dark:text-blue-400">{s.reliability}%</span>
+                           </div>
+                           <div className="h-2 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
+                              <motion.div 
+                                 initial={{ width: 0 }}
+                                 animate={{ width: `${s.reliability}%` }}
+                                 className={`h-full ${Number(s.reliability) > 85 ? 'bg-teal-500' : Number(s.reliability) > 50 ? 'bg-blue-500' : 'bg-red-500'}`}
+                              />
+                           </div>
+                        </div>
+                     ))}
+                  </div>
+               </div>
+
+               <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-[2.5rem] p-10 shadow-xl shadow-slate-200/40 dark:shadow-none space-y-8">
+                  <div className="flex justify-between items-center">
+                     <div>
+                        <h4 className="text-lg font-black text-slate-900 dark:text-white tracking-tight">Spend Analytics</h4>
+                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Total cost of procurement by vendor</p>
+                     </div>
+                     <div className="w-12 h-12 bg-slate-50 dark:bg-slate-800 rounded-2xl flex items-center justify-center text-slate-400">
+                        <BarChart3 size={20} />
+                     </div>
+                  </div>
+                  <div className="space-y-6">
+                     {supplierPerformance.map((s, idx) => (
+                        <div key={idx} className="flex items-center justify-between p-4 bg-slate-50 dark:bg-slate-800/50 rounded-2xl transition-colors">
+                           <div className="flex items-center gap-4">
+                              <div className="w-10 h-10 bg-white dark:bg-slate-900 rounded-xl flex items-center justify-center text-xs font-black border border-slate-100 dark:border-slate-800">
+                                 {s.name[0]}
+                              </div>
+                              <div>
+                                 <p className="text-xs font-bold text-slate-900 dark:text-white leading-none">{s.name}</p>
+                                 <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mt-1">{s.orderCount} Orders</p>
+                              </div>
+                           </div>
+                           <p className="font-black text-slate-900 dark:text-white tracking-tighter text-sm">GHS {s.totalSpend.toLocaleString()}</p>
+                        </div>
+                     ))}
+                  </div>
+               </div>
+            </div>
+          </motion.div>
+        )}
+
         {activeSubTab === 'orders' && (
-           <motion.div 
-             key="orders"
-             initial={{ opacity: 0, x: 20 }}
-             animate={{ opacity: 1, x: 0 }}
-             exit={{ opacity: 0, x: -20 }}
-             className="space-y-6"
-           >
-             <div className="flex flex-col md:flex-row justify-between items-center gap-4">
-                <div className="bg-slate-100 dark:bg-slate-800 p-1.5 rounded-2xl flex gap-1 w-full md:w-auto transition-colors">
-                    {['all', 'pending', 'received'].map(status => (
-                      <button
-                        key={status}
-                        onClick={() => setPoStatusFilter(status as any)}
-                        className={`px-6 py-2 rounded-xl text-[10px] font-black uppercase tracking-[0.1em] transition-all flex-1 md:flex-none ${
-                          poStatusFilter === status 
-                            ? 'bg-white dark:bg-slate-700 text-blue-600 dark:text-blue-400 shadow-sm' 
-                            : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'
-                        }`}
-                      >
-                        {status}
-                      </button>
-                    ))}
+          <motion.div 
+            key="orders"
+            initial={{ opacity: 0, x: 20 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: -20 }}
+            className="space-y-6"
+          >
+             <div className="flex flex-col md:flex-row justify-between items-center gap-6">
+                <div>
+                   <h3 className="text-2xl font-black text-slate-900 dark:text-white tracking-tight">Order History Archive</h3>
+                   <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">Chronological log of all procurement activity</p>
                 </div>
-                <button 
-                  onClick={() => {
-                    setEditingPOId(null);
-                    setOrderItems([]);
-                    setSelectedSupplierId('');
-                    setIsModalOpen(true);
-                  }}
-                  className="flex items-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-blue-700 transition-all shadow-lg shadow-blue-500/20 w-full md:w-auto justify-center"
-                >
-                    <Plus size={16} /> New Order
-                </button>
+                <div className="flex flex-col md:flex-row gap-4 w-full md:w-auto">
+                   <div className="bg-slate-100 dark:bg-slate-800 p-1.5 rounded-2xl flex gap-1 transition-colors">
+                       {['all', 'pending', 'received'].map(status => (
+                         <button
+                           key={status}
+                           onClick={() => setPoStatusFilter(status as any)}
+                           className={`px-6 py-2 rounded-xl text-[10px] font-black uppercase tracking-[0.1em] transition-all flex-1 md:flex-none ${
+                             poStatusFilter === status 
+                               ? 'bg-white dark:bg-slate-700 text-blue-600 dark:text-blue-400 shadow-sm' 
+                               : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'
+                           }`}
+                         >
+                           {status}
+                         </button>
+                       ))}
+                   </div>
+                   <button 
+                     onClick={() => {
+                       setEditingPOId(null);
+                       setOrderItems([]);
+                       setSelectedSupplierId('');
+                       setIsModalOpen(true);
+                     }}
+                     className="flex items-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-blue-700 transition-all shadow-lg shadow-blue-500/20 justify-center"
+                   >
+                       <Plus size={16} /> New Order
+                   </button>
+                </div>
              </div>
              <div className="bg-white dark:bg-slate-900 rounded-[2.5rem] border border-slate-100 dark:border-slate-800 shadow-xl shadow-slate-200/40 dark:shadow-none overflow-hidden transition-colors">
                 <table className="w-full text-left">
@@ -1042,7 +1397,7 @@ export default function InventoryManager() {
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-50 dark:divide-slate-800">
-                        {purchaseOrders
+                        {sortedPurchaseOrders
                           .filter(o => poStatusFilter === 'all' || o.status === poStatusFilter)
                           .map(o => (
                             <tr key={o.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors group">

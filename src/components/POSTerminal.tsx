@@ -17,10 +17,13 @@ import { motion, AnimatePresence } from 'motion/react';
 export default function POSTerminal() {
   const [cart, setCart] = useState<any[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
-  const [paymentStatus, setPaymentStatus] = useState<'idle' | 'initializing' | 'waiting' | 'verifying' | 'success' | 'error'>('idle');
+  const [paymentStatus, setPaymentStatus] = useState<'idle' | 'initializing' | 'waiting' | 'verifying' | 'otp_required' | 'success' | 'error'>('idle');
   const [activeProvider, setActiveProvider] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [transactionDetails, setTransactionDetails] = useState<any>(null);
+  const [phoneNumber, setPhoneNumber] = useState('');
+  const [otp, setOtp] = useState('');
+  const [isMoMoModalOpen, setIsMoMoModalOpen] = useState(false);
 
   const products = [
     { id: '1', name: 'Coffee Latte', price: 25.5, category: 'Drinks' },
@@ -41,11 +44,12 @@ export default function POSTerminal() {
     });
   };
 
-  const handlePayment = async (provider: string) => {
+  const handlePayment = async (provider: string, phone: string) => {
     if (cart.length === 0) return;
     setActiveProvider(provider);
     setErrorMessage(null);
     setPaymentStatus('initializing');
+    setIsMoMoModalOpen(false);
 
     try {
       // Step 1: Initialize Payment
@@ -56,48 +60,17 @@ export default function POSTerminal() {
         body: JSON.stringify({
           amount: total,
           email: 'customer@example.com',
-          phone: '0551234567',
-          currency: 'GHS'
+          phone: phone,
+          currency: 'GHS',
+          channel: 'mobile_money'
         })
       });
 
       const result = await response.json();
       
       if (result.status === 'success' || result.status === true) {
-        setPaymentStatus('waiting');
         setTransactionDetails(result.data);
-        
-        // In a real app, you would use window.open(result.data.link or result.data.authorization_url)
-        // For the school project, we simulate the 'user paying' action
-        
-        const txRef = result.data.tx_ref || result.data.reference;
-        
-        // Step 2: Simulate the manual payment authorization delay
-        setTimeout(async () => {
-          setPaymentStatus('verifying');
-          
-          // Step 3: Verify Payment
-          try {
-            const verifyEndpoint = provider === 'Paystack' 
-              ? `/api/payments/paystack/verify/${txRef}` 
-              : `/api/payments/flutterwave/verify/${txRef}?tx_ref=${txRef}`;
-            
-            const verifyRes = await fetch(verifyEndpoint);
-            const verifyResult = await verifyRes.json();
-
-            if (verifyResult.status === 'success' || verifyResult.status === true) {
-              setPaymentStatus('success');
-              setCart([]);
-            } else {
-              setPaymentStatus('error');
-              setErrorMessage(verifyResult.message || 'Payment Verification Failed');
-            }
-          } catch (err) {
-            setPaymentStatus('error');
-            setErrorMessage('Network error during verification');
-          }
-        }, 3000);
-
+        setPaymentStatus('otp_required');
       } else {
         setPaymentStatus('error');
         setErrorMessage('Failed to initialize payment gateway');
@@ -108,10 +81,99 @@ export default function POSTerminal() {
     }
   };
 
+  const handleVerifyOtp = async () => {
+    if (!otp || otp.length < 4) {
+      setErrorMessage('Please enter a valid OTP');
+      return;
+    }
+
+    setPaymentStatus('verifying');
+    const txRef = transactionDetails.tx_ref || transactionDetails.reference;
+
+    try {
+      const verifyEndpoint = activeProvider === 'Paystack' 
+        ? `/api/payments/paystack/verify/${txRef}` 
+        : `/api/payments/flutterwave/verify/${txRef}?tx_ref=${txRef}`;
+      
+      await new Promise(resolve => setTimeout(resolve, 2000));
+
+      const verifyRes = await fetch(verifyEndpoint);
+      const verifyResult = await verifyRes.json();
+
+      if (verifyResult.status === 'success' || verifyResult.status === true) {
+        setPaymentStatus('success');
+        setCart([]);
+        setPhoneNumber('');
+        setOtp('');
+      } else {
+        setPaymentStatus('error');
+        setErrorMessage(verifyResult.message || 'Payment Verification Failed');
+      }
+    } catch (err) {
+      setPaymentStatus('error');
+      setErrorMessage('Network error during verification');
+    }
+  };
+
   const total = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
 
   return (
     <div className="relative flex h-full gap-6 overflow-hidden">
+      <AnimatePresence>
+        {isMoMoModalOpen && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="absolute inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm"
+          >
+            <motion.div 
+              initial={{ y: 20, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              className="bg-white dark:bg-slate-900 p-8 rounded-3xl shadow-2xl max-w-sm w-full mx-4 space-y-6"
+            >
+              <div className="flex items-center gap-4 text-blue-600">
+                <div className="w-12 h-12 bg-blue-50 dark:bg-blue-900/40 rounded-2xl flex items-center justify-center">
+                  <Smartphone size={24} />
+                </div>
+                <div>
+                  <h3 className="text-xl font-bold text-slate-900 dark:text-white">Mobile Money</h3>
+                  <p className="text-xs text-slate-500 font-medium">MTN / Vodafone / AirtelTigo</p>
+                </div>
+              </div>
+              
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Phone Number</label>
+                  <input 
+                    type="tel" 
+                    value={phoneNumber}
+                    onChange={(e) => setPhoneNumber(e.target.value)}
+                    placeholder="e.g. 055 123 4567"
+                    className="w-full px-5 py-4 bg-slate-100 dark:bg-slate-800 border-none rounded-xl text-sm focus:ring-2 focus:ring-blue-500 outline-none transition-all dark:text-white"
+                  />
+                </div>
+                <div className="flex gap-3">
+                  <button 
+                    onClick={() => setIsMoMoModalOpen(false)}
+                    className="flex-1 py-4 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-slate-200 dark:hover:bg-slate-700 transition-all"
+                  >
+                    Cancel
+                  </button>
+                  <button 
+                    onClick={() => handlePayment(activeProvider!, phoneNumber)}
+                    disabled={!phoneNumber || phoneNumber.length < 10}
+                    className="flex-1 py-4 bg-blue-600 text-white rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-blue-700 transition-all shadow-lg shadow-blue-500/20 disabled:opacity-50 disabled:shadow-none"
+                  >
+                    Continue
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* Payment Overlay */}
       <AnimatePresence>
         {paymentStatus !== 'idle' && (
@@ -127,21 +189,42 @@ export default function POSTerminal() {
               className="bg-white dark:bg-slate-900 rounded-3xl shadow-2xl text-center max-w-sm w-full mx-4 overflow-hidden"
             >
               <div className="p-8">
-                {paymentStatus === 'initializing' || paymentStatus === 'waiting' || paymentStatus === 'verifying' ? (
+                {paymentStatus === 'initializing' || paymentStatus === 'waiting' || paymentStatus === 'verifying' || paymentStatus === 'otp_required' ? (
                   <div className="space-y-6">
                     <div className="flex justify-center">
-                      <Loader2 size={64} className="text-blue-600 animate-spin" />
+                      <Loader2 size={64} className={`text-blue-600 ${paymentStatus === 'otp_required' ? '' : 'animate-spin'}`} />
                     </div>
                     <div className="space-y-2">
                       <h3 className="text-xl font-bold text-slate-900 dark:text-white uppercase tracking-tight">
                         {paymentStatus === 'initializing' && 'Initializing Gateway...'}
                         {paymentStatus === 'waiting' && `Waiting for ${activeProvider}...`}
                         {paymentStatus === 'verifying' && 'Verifying Payment...'}
+                        {paymentStatus === 'otp_required' && 'OTP Verification'}
                       </h3>
                       <p className="text-sm text-slate-500">
-                        {paymentStatus === 'waiting' ? 'Please complete the prompt on your mobile device.' : 'Finalizing transaction details...'}
+                        {paymentStatus === 'otp_required' ? `An OTP has been sent to ${phoneNumber}.` : paymentStatus === 'waiting' ? 'Please complete the prompt on your mobile device.' : 'Finalizing transaction details...'}
                       </p>
                     </div>
+                    
+                    {paymentStatus === 'otp_required' && (
+                      <div className="space-y-4">
+                        <input 
+                          type="text" 
+                          value={otp}
+                          onChange={(e) => setOtp(e.target.value)}
+                          placeholder="Enter 6-digit OTP"
+                          maxLength={6}
+                          className="w-full px-5 py-4 bg-slate-100 dark:bg-slate-800 border-none rounded-xl text-center text-lg font-mono tracking-[0.5em] focus:ring-2 focus:ring-blue-500 outline-none transition-all dark:text-white"
+                        />
+                        {errorMessage && <p className="text-[10px] font-bold text-red-500 uppercase tracking-widest">{errorMessage}</p>}
+                        <button 
+                          onClick={handleVerifyOtp}
+                          className="w-full py-4 bg-blue-600 text-white rounded-xl font-black text-xs uppercase tracking-widest hover:bg-blue-700 transition-all shadow-lg shadow-blue-500/20"
+                        >
+                          Verify & Complete
+                        </button>
+                      </div>
+                    )}
                     
                     {transactionDetails && (
                       <div className="bg-slate-50 dark:bg-slate-800 rounded-2xl p-4 space-y-2 text-left border border-slate-100 dark:border-slate-700">
@@ -304,14 +387,20 @@ export default function POSTerminal() {
 
         <div className="p-5 bg-slate-50 dark:bg-slate-900 border-t border-slate-100 dark:border-slate-800 flex flex-col gap-3 shrink-0">
           <button 
-            onClick={() => handlePayment('Paystack')}
+            onClick={() => {
+              setActiveProvider('Paystack');
+              setIsMoMoModalOpen(true);
+            }}
             className="w-full py-4 bg-blue-600 text-white rounded-xl text-[10px] font-black uppercase tracking-[0.2em] flex items-center justify-center gap-2 shadow-lg shadow-blue-500/20 hover:bg-blue-700 transition-all active:scale-[0.98]"
           >
             <CreditCard size={16} />
             Paystack
           </button>
           <button 
-            onClick={() => handlePayment('Flutterwave')}
+            onClick={() => {
+              setActiveProvider('Flutterwave');
+              setIsMoMoModalOpen(true);
+            }}
             className="w-full py-4 bg-orange-500 text-white rounded-xl text-[10px] font-black uppercase tracking-[0.2em] flex items-center justify-center gap-2 shadow-lg shadow-orange-500/20 hover:bg-orange-600 transition-all active:scale-[0.98]"
           >
             <Smartphone size={16} />
