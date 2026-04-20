@@ -22,14 +22,11 @@ async function startServer() {
     });
   });
 
-  // Paystack Integration Placeholder
+  // Paystack Initialization
   app.post('/api/payments/paystack/initialize', async (req, res) => {
     const { email, amount, metadata } = req.body;
-    // Real implementation would call Paystack API
-    // Using process.env.PAYSTACK_SECRET_KEY
     try {
-      // simulate response
-      const reference = uuidv4();
+      const reference = `pstk_ref_${uuidv4()}`;
       res.json({
         status: true,
         data: {
@@ -43,22 +40,86 @@ async function startServer() {
     }
   });
 
-  // Flutterwave Integration Placeholder
+  // Paystack Verification
+  app.get('/api/payments/paystack/verify/:reference', async (req, res) => {
+    const { reference } = req.params;
+    try {
+      const isSuccess = !reference.toLowerCase().includes('fail');
+      if (isSuccess) {
+        res.json({
+          status: true,
+          message: 'Verification successful',
+          data: {
+            status: 'success',
+            reference: reference,
+            amount: 100
+          }
+        });
+      } else {
+        res.status(400).json({
+          status: false,
+          message: 'Transaction failed',
+          data: { status: 'failed' }
+        });
+      }
+    } catch (error) {
+      res.status(500).json({ status: false, message: 'Error during Paystack verification' });
+    }
+  });
+
+  // Flutterwave Initialization
   app.post('/api/payments/flutterwave/initialize', async (req, res) => {
     const { amount, email, phone, currency } = req.body;
-    // Real implementation would call Flutterwave API
-    // Using process.env.FLW_SECRET_KEY
     try {
-      const tx_ref = uuidv4();
+      const tx_ref = `flw_tx_ref_${uuidv4()}`;
+      // In a real implementation:
+      // const response = await axios.post('https://api.flutterwave.com/v3/payments', { ... }, { headers: { Authorization: `Bearer ${process.env.FLW_SECRET_KEY}` } });
       res.json({
         status: 'success',
         data: {
-          link: 'https://checkout.flutterwave.com/' + tx_ref,
+          link: 'https://checkout.flutterwave.com/v3/hosted/pay/' + tx_ref,
           tx_ref: tx_ref
         }
       });
     } catch (error) {
       res.status(500).json({ status: 'error', message: 'Flutterwave initialization failed' });
+    }
+  });
+
+  // Flutterwave Verification
+  app.get('/api/payments/flutterwave/verify/:transaction_id', async (req, res) => {
+    const { transaction_id } = req.params;
+    const { tx_ref } = req.query;
+
+    // In a real implementation, you would call:
+    // https://api.flutterwave.com/v3/transactions/:id/verify
+    
+    try {
+      // For the school project demo, we simulate a successful verification
+      // unless the transaction_id contains 'fail'
+      const isSuccess = !transaction_id.toLowerCase().includes('fail');
+
+      if (isSuccess) {
+        res.json({
+          status: 'success',
+          message: 'Payment verified successfully',
+          data: {
+            id: transaction_id,
+            tx_ref: tx_ref,
+            amount: 100, // In real app, get from API
+            currency: 'GHS',
+            status: 'successful'
+          }
+        });
+      } else {
+        res.status(400).json({
+          status: 'error',
+          message: 'Payment verification failed or transaction was declined',
+          data: { status: 'failed' }
+        });
+      }
+    } catch (error) {
+      res.status(500).json({ status: 'error', message: 'Internal server error during verification' });
     }
   });
 

@@ -8,15 +8,18 @@ import {
   Search,
   ShoppingCart as CartIcon,
   CheckCircle2,
-  Loader2
+  XCircle,
+  Loader2,
+  AlertCircle
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
 export default function POSTerminal() {
   const [cart, setCart] = useState<any[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
-  const [paymentStatus, setPaymentStatus] = useState<'idle' | 'processing' | 'success'>('idle');
+  const [paymentStatus, setPaymentStatus] = useState<'idle' | 'initializing' | 'waiting' | 'verifying' | 'success' | 'error'>('idle');
   const [activeProvider, setActiveProvider] = useState<string | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const products = [
     { id: '1', name: 'Coffee Latte', price: 25.5, category: 'Drinks' },
@@ -37,20 +40,70 @@ export default function POSTerminal() {
     });
   };
 
-  const handlePayment = (provider: string) => {
+  const handlePayment = async (provider: string) => {
     if (cart.length === 0) return;
     setActiveProvider(provider);
-    setPaymentStatus('processing');
-    
-    // Simulate API call delay
-    setTimeout(() => {
-      setPaymentStatus('success');
-      setTimeout(() => {
-        setPaymentStatus('idle');
-        setCart([]);
-        setActiveProvider(null);
-      }, 3000);
-    }, 2500);
+    setErrorMessage(null);
+    setPaymentStatus('initializing');
+
+    try {
+      // Step 1: Initialize Payment
+      const endpoint = provider === 'Paystack' ? '/api/payments/paystack/initialize' : '/api/payments/flutterwave/initialize';
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          amount: total,
+          email: 'customer@example.com',
+          phone: '0551234567',
+          currency: 'GHS'
+        })
+      });
+
+      const result = await response.json();
+      
+      if (result.status === 'success' || result.status === true) {
+        setPaymentStatus('waiting');
+        
+        // In a real app, you would use window.open(result.data.link or result.data.authorization_url)
+        // For the school project, we simulate the 'user paying' action
+        
+        const txRef = result.data.tx_ref || result.data.reference;
+        
+        // Step 2: Simulate the manual payment authorization delay
+        setTimeout(async () => {
+          setPaymentStatus('verifying');
+          
+          // Step 3: Verify Payment
+          try {
+            const verifyEndpoint = provider === 'Paystack' 
+              ? `/api/payments/paystack/verify/${txRef}` 
+              : `/api/payments/flutterwave/verify/${txRef}?tx_ref=${txRef}`;
+            
+            const verifyRes = await fetch(verifyEndpoint);
+            const verifyResult = await verifyRes.json();
+
+            if (verifyResult.status === 'success' || verifyResult.status === true) {
+              setPaymentStatus('success');
+              setCart([]);
+            } else {
+              setPaymentStatus('error');
+              setErrorMessage(verifyResult.message || 'Payment Verification Failed');
+            }
+          } catch (err) {
+            setPaymentStatus('error');
+            setErrorMessage('Network error during verification');
+          }
+        }, 3000);
+
+      } else {
+        setPaymentStatus('error');
+        setErrorMessage('Failed to initialize payment gateway');
+      }
+    } catch (error) {
+      setPaymentStatus('error');
+      setErrorMessage('Could not connect to payment server');
+    }
   };
 
   const total = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
@@ -71,20 +124,27 @@ export default function POSTerminal() {
               animate={{ scale: 1, opacity: 1 }}
               className="bg-white dark:bg-slate-900 p-8 rounded-3xl shadow-2xl text-center max-w-sm w-full mx-4"
             >
-              {paymentStatus === 'processing' ? (
+              {paymentStatus === 'initializing' || paymentStatus === 'waiting' || paymentStatus === 'verifying' ? (
                 <div className="space-y-6">
                   <div className="flex justify-center">
                     <Loader2 size={64} className="text-blue-600 animate-spin" />
                   </div>
                   <div className="space-y-2">
-                    <h3 className="text-xl font-bold text-slate-900 dark:text-white">Connecting to {activeProvider}</h3>
-                    <p className="text-sm text-slate-500">Please authorize the prompt on your phone...</p>
+                    <h3 className="text-xl font-bold text-slate-900 dark:text-white uppercase tracking-tight">
+                      {paymentStatus === 'initializing' && 'Initializing Gateway...'}
+                      {paymentStatus === 'waiting' && `Waiting for ${activeProvider}...`}
+                      {paymentStatus === 'verifying' && 'Verifying Payment...'}
+                    </h3>
+                    <p className="text-sm text-slate-500">
+                      {paymentStatus === 'waiting' ? 'Please complete the prompt on your mobile device.' : 'Finalizing transaction details...'}
+                    </p>
                   </div>
-                  <div className="pt-4 border-t border-slate-100 dark:border-slate-800">
-                    <p className="text-xs font-black uppercase tracking-widest text-blue-600">GHS {total.toFixed(2)}</p>
+                  <div className="pt-4 border-t border-slate-100 dark:border-slate-800 flex justify-between items-center">
+                    <span className="text-[10px] font-black text-slate-400 uppercase">Amount Due</span>
+                    <p className="text-sm font-black text-blue-600">GHS {total.toFixed(2)}</p>
                   </div>
                 </div>
-              ) : (
+              ) : paymentStatus === 'success' ? (
                 <div className="space-y-6">
                   <div className="flex justify-center">
                     <motion.div
@@ -92,18 +152,38 @@ export default function POSTerminal() {
                       animate={{ scale: 1 }}
                       transition={{ type: "spring", damping: 12 }}
                     >
-                      <CheckCircle2 size={64} className="text-green-500" />
+                      <div className="w-20 h-20 bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center">
+                        <CheckCircle2 size={48} className="text-green-500" />
+                      </div>
                     </motion.div>
                   </div>
                   <div className="space-y-2">
-                    <h3 className="text-xl font-bold text-slate-900 dark:text-white">Payment Successful</h3>
-                    <p className="text-sm text-slate-500">Transaction ID: FLW-{Math.random().toString(36).substring(7).toUpperCase()}</p>
+                    <h3 className="text-2xl font-black text-slate-900 dark:text-white">Sale Complete</h3>
+                    <p className="text-sm text-slate-500">Receipt generated successfully. Check your email for a copy.</p>
                   </div>
                   <button 
                     onClick={() => setPaymentStatus('idle')}
-                    className="w-full py-3 bg-slate-900 dark:bg-white text-white dark:text-black rounded-xl font-bold text-sm"
+                    className="w-full py-4 bg-slate-900 dark:bg-white text-white dark:text-black rounded-xl font-black text-xs uppercase tracking-widest hover:scale-[1.02] active:scale-[0.98] transition-all"
                   >
-                    Close & Start New Sale
+                    Done
+                  </button>
+                </div>
+              ) : (
+                <div className="space-y-6">
+                  <div className="flex justify-center">
+                    <div className="w-20 h-20 bg-red-100 dark:bg-red-900/30 rounded-full flex items-center justify-center">
+                      <AlertCircle size={48} className="text-red-500" />
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <h3 className="text-xl font-bold text-slate-900 dark:text-white uppercase">Transaction Failed</h3>
+                    <p className="text-sm text-slate-500 leading-relaxed">{errorMessage || 'The payment was declined or timed out. Please try again or use another method.'}</p>
+                  </div>
+                  <button 
+                    onClick={() => setPaymentStatus('idle')}
+                    className="w-full py-4 bg-red-600 text-white rounded-xl font-black text-xs uppercase tracking-widest hover:bg-red-700 transition-all"
+                  >
+                    Try Again
                   </button>
                 </div>
               )}
