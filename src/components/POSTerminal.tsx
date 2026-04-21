@@ -14,7 +14,8 @@ import {
   User as UserIcon,
   Scan,
   Printer,
-  ChevronRight
+  ChevronRight,
+  Zap
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -26,6 +27,7 @@ export default function POSTerminal() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [transactionDetails, setTransactionDetails] = useState<any>(null);
   const [phoneNumber, setPhoneNumber] = useState('');
+  const [momoProvider, setMomoProvider] = useState('mtn');
   const [otp, setOtp] = useState('');
   const [isMoMoModalOpen, setIsMoMoModalOpen] = useState(false);
   const [discount, setDiscount] = useState<number>(0);
@@ -88,7 +90,13 @@ export default function POSTerminal() {
         const txRef = transactionDetails?.reference || transactionDetails?.tx_ref;
         if (!txRef) return;
         try {
-          const verifyRes = await fetch(`/api/payments/paystack/verify/${txRef}`);
+          const endpoint = activeProvider === 'Paystack' 
+            ? `/api/payments/paystack/verify/${txRef}`
+            : activeProvider === 'Hubtel'
+            ? `/api/payments/hubtel/verify/${txRef}`
+            : `/api/payments/flutterwave/verify/${txRef}`;
+            
+          const verifyRes = await fetch(endpoint);
           const verifyResult = await verifyRes.json();
           if (verifyResult.status === true && (verifyResult.data?.status === 'success' || verifyResult.data?.status === 'successful')) {
             completeSale();
@@ -100,7 +108,7 @@ export default function POSTerminal() {
       }, 10000);
     }
     return () => clearInterval(interval);
-  }, [paymentStatus, transactionDetails]);
+  }, [paymentStatus, transactionDetails, activeProvider]);
 
   const completeSale = (methodOverride?: string) => {
     setLastOrderDetails({
@@ -130,7 +138,10 @@ export default function POSTerminal() {
     setIsMoMoModalOpen(false);
 
     try {
-      const endpoint = provider === 'Paystack' ? '/api/payments/paystack/initialize' : '/api/payments/flutterwave/initialize';
+      let endpoint = '/api/payments/paystack/initialize';
+      if (provider === 'Flutterwave') endpoint = '/api/payments/flutterwave/initialize';
+      if (provider === 'Hubtel') endpoint = '/api/payments/hubtel/initialize';
+      
       const response = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -139,7 +150,7 @@ export default function POSTerminal() {
           email: 'customer@example.com',
           phone: phone,
           currency: 'GHS',
-          provider: 'mtn',
+          provider: momoProvider,
           channel: 'mobile_money'
         })
       });
@@ -223,15 +234,36 @@ export default function POSTerminal() {
               </div>
               
               <div className="space-y-4">
-                <div className="space-y-2">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Phone Number</label>
-                  <input 
-                    type="tel" 
-                    value={phoneNumber}
-                    onChange={(e) => setPhoneNumber(e.target.value)}
-                    placeholder="e.g. 055 123 4567"
-                    className="w-full px-5 py-4 bg-slate-100 dark:bg-slate-800 border-none rounded-xl text-sm focus:ring-2 focus:ring-blue-500 outline-none transition-all dark:text-white"
-                  />
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Phone Number</label>
+                    <input 
+                      type="tel" 
+                      value={phoneNumber}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setPhoneNumber(val);
+                        // Auto-detect provider
+                        if (val.startsWith('024') || val.startsWith('054') || val.startsWith('055') || val.startsWith('059') || val.startsWith('025')) setMomoProvider('mtn');
+                        else if (val.startsWith('020') || val.startsWith('050')) setMomoProvider('vod');
+                        else if (val.startsWith('026') || val.startsWith('056') || val.startsWith('027') || val.startsWith('057')) setMomoProvider('tgo');
+                      }}
+                      placeholder="e.g. 055 123 4567"
+                      className="w-full px-5 py-4 bg-slate-100 dark:bg-slate-800 border-none rounded-xl text-sm focus:ring-2 focus:ring-blue-500 outline-none transition-all dark:text-white"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Network</label>
+                    <select 
+                      value={momoProvider}
+                      onChange={(e) => setMomoProvider(e.target.value)}
+                      className="w-full px-5 py-4 bg-slate-100 dark:bg-slate-800 border-none rounded-xl text-sm focus:ring-2 focus:ring-blue-500 outline-none transition-all dark:text-white appearance-none cursor-pointer"
+                    >
+                      <option value="mtn">MTN</option>
+                      <option value="vod">Vodafone</option>
+                      <option value="tgo">AirtelTigo</option>
+                    </select>
+                  </div>
                 </div>
                 <div className="flex gap-3">
                   <button 
@@ -704,17 +736,31 @@ export default function POSTerminal() {
 
         <div className="p-8 bg-slate-50 dark:bg-slate-800 border-t border-slate-100 dark:border-slate-800 flex flex-col gap-4">
           <div className="flex flex-col gap-3">
-             <button 
-                onClick={() => {
-                  setActiveProvider('Paystack');
-                  setIsMoMoModalOpen(true);
-                }}
-                disabled={cart.length === 0}
-                className="w-full py-5 bg-blue-600 text-white rounded-[1.5rem] text-[11px] font-black uppercase tracking-[0.2em] flex items-center justify-center gap-3 shadow-2xl shadow-blue-500/30 hover:bg-blue-700 hover:translate-y-[-2px] transition-all active:scale-[0.98] disabled:opacity-50 disabled:grayscale disabled:translate-y-0"
-              >
-                <Smartphone size={20} />
-                Mobile Money
-              </button>
+             <div className="grid grid-cols-2 gap-3">
+               <button 
+                  onClick={() => {
+                    setActiveProvider('Paystack');
+                    setIsMoMoModalOpen(true);
+                  }}
+                  disabled={cart.length === 0}
+                  className="py-5 bg-blue-600 text-white rounded-[1.5rem] text-[11px] font-black uppercase tracking-[0.2em] flex items-center justify-center gap-3 shadow-xl shadow-blue-500/20 hover:bg-blue-700 hover:translate-y-[-2px] transition-all active:scale-[0.98] disabled:opacity-50 disabled:grayscale disabled:translate-y-0"
+                >
+                  <Smartphone size={20} />
+                  MoMo
+                </button>
+                
+                <button 
+                  onClick={() => {
+                    setActiveProvider('Hubtel');
+                    setIsMoMoModalOpen(true);
+                  }}
+                  disabled={cart.length === 0}
+                  className="py-5 bg-teal-600 text-white rounded-[1.5rem] text-[11px] font-black uppercase tracking-[0.2em] flex items-center justify-center gap-3 shadow-xl shadow-teal-500/20 hover:bg-teal-700 hover:translate-y-[-2px] transition-all active:scale-[0.98] disabled:opacity-50 disabled:grayscale disabled:translate-y-0"
+                >
+                  <Zap size={20} />
+                  Hubtel
+                </button>
+             </div>
               
               <div className="grid grid-cols-2 gap-3">
                 <button 

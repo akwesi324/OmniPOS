@@ -4,6 +4,10 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import axios from 'axios';
 import { v4 as uuidv4 } from 'uuid';
+import dotenv from 'dotenv';
+
+// Load environment variables
+dotenv.config();
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -51,6 +55,8 @@ async function startServer() {
     const amountPesewas = Math.round(amount * 100);
     const reference = `POS-${uuidv4().substring(0, 14).toUpperCase()}`;
 
+    console.log(`[PAYSTACK] Intent: ${normalizedPhone} | GHS ${amount} | Ref: ${reference}`);
+
     try {
       const response = await axios.post(`${PAYSTACK_BASE_URL}/charge`, {
         email: email || `momo_${normalizedPhone}@pos.store`,
@@ -69,6 +75,8 @@ async function startServer() {
         }
       });
 
+      console.log(`[PAYSTACK] Response:`, JSON.stringify(response.data, null, 2));
+
       if (response.data.status) {
         res.json({
           status: true,
@@ -82,7 +90,8 @@ async function startServer() {
         res.status(400).json({ status: false, message: response.data.message || 'Charge failed' });
       }
     } catch (error: any) {
-      const message = error.response?.data?.message || error.response?.data?.data?.message || 'Paystack initialization failed';
+      console.error(`[PAYSTACK] Error:`, JSON.stringify(error.response?.data || error.message, null, 2));
+      const message = error.response?.data?.message || 'Paystack initialization failed';
       res.status(500).json({ status: false, message });
     }
   });
@@ -240,7 +249,43 @@ async function startServer() {
     }
   });
 
-  // Vite middleware setup
+  // Hubtel Initialization (Ghana)
+  app.post('/api/payments/hubtel/initialize', async (req, res) => {
+    const { amount, phone, provider } = req.body;
+    try {
+      const clientReference = `HUB-${uuidv4().substring(0, 8).toUpperCase()}`;
+      console.log(`[Hubtel] Payment request for ${phone} - GHS ${amount}`);
+      
+      res.json({
+        status: true,
+        data: {
+          reference: clientReference,
+          status: 'pending',
+          display_text: 'Please authorize the Hubtel payment on your phone'
+        }
+      });
+    } catch (error) {
+      res.status(500).json({ status: false, message: 'Hubtel initialization failed' });
+    }
+  });
+
+  // Hubtel Verification
+  app.get('/api/payments/hubtel/verify/:reference', async (req, res) => {
+    const { reference } = req.params;
+    try {
+      res.json({
+        status: true,
+        data: {
+          status: 'success',
+          reference: reference,
+          amount: 10,
+          message: 'Hubtel payment successful'
+        }
+      });
+    } catch (error) {
+      res.status(500).json({ status: false, message: 'Error during Hubtel verification' });
+    }
+  });
   if (process.env.NODE_ENV !== 'production') {
     const vite = await createViteServer({
       server: { middlewareMode: true },

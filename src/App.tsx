@@ -6,7 +6,7 @@ import {
   Package, 
   Users, 
   BarChart3, 
-  Settings, 
+  Settings as SettingsIcon, 
   LogOut, 
   Menu, 
   User as UserIcon,
@@ -26,6 +26,7 @@ import POSTerminal from './components/POSTerminal';
 import InventoryManager from './components/InventoryManager';
 import CustomerManager from './components/CustomerManager';
 import Reports from './components/Reports';
+import Settings from './components/Settings';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState('dashboard');
@@ -68,7 +69,7 @@ export default function App() {
     { id: 'inventory', name: 'Inventory', icon: Package },
     { id: 'customers', name: 'Customers', icon: Users },
     { id: 'reports', name: 'Reports', icon: BarChart3 },
-    { id: 'settings', name: 'Settings', icon: Settings },
+    { id: 'settings', name: 'Settings', icon: SettingsIcon },
   ];
 
   return (
@@ -206,43 +207,7 @@ export default function App() {
               {activeTab === 'inventory' && <InventoryManager />}
               {activeTab === 'customers' && <CustomerManager />}
               {activeTab === 'reports' && <Reports />}
-               {activeTab === 'settings' && (
-                <div className="max-w-2xl mx-auto bg-white dark:bg-slate-900 p-12 rounded-[2rem] border border-gray-100 dark:border-slate-800 shadow-xl shadow-gray-900/5 transition-colors">
-                  <h2 className="text-3xl font-black mb-8 tracking-tighter dark:text-white">System Configuration</h2>
-                  <div className="space-y-8">
-                    <div className="p-8 border border-gray-100 dark:border-slate-800 rounded-3xl space-y-4">
-                       <h3 className="font-bold text-lg dark:text-slate-200">Integrated Payments</h3>
-                       <div className="flex items-center justify-between p-4 bg-gray-50 dark:bg-slate-800 rounded-2xl transition-colors">
-                          <div className="flex items-center gap-3">
-                            <div className="w-8 h-8 bg-blue-600 rounded-full" />
-                            <span className="font-bold text-sm dark:text-slate-200">Paystack</span>
-                          </div>
-                          <span className="text-xs font-black text-green-600 dark:text-green-400 uppercase tracking-widest">Connected</span>
-                       </div>
-                       <div className="flex items-center justify-between p-4 bg-gray-50 dark:bg-slate-800 rounded-2xl transition-colors">
-                          <div className="flex items-center gap-3">
-                            <div className="w-8 h-8 bg-orange-500 rounded-full flex items-center justify-center text-white text-[8px] font-black">FLW</div>
-                            <span className="font-bold text-sm dark:text-slate-200">Flutterwave</span>
-                          </div>
-                          <span className="text-xs font-black text-gray-400 dark:text-slate-500 uppercase tracking-widest">Required Config</span>
-                       </div>
-                    </div>
-                    
-                    <div className="p-8 border border-gray-100 dark:border-slate-800 rounded-3xl space-y-6">
-                       <h3 className="font-bold text-lg dark:text-slate-200">Visual Preferences</h3>
-                       <div className="flex items-center justify-between">
-                          <div>
-                            <p className="font-bold text-sm dark:text-slate-200">High Contrast Mode</p>
-                            <p className="text-xs text-slate-500">Increase readability for intense light</p>
-                          </div>
-                          <div className="w-12 h-6 bg-slate-200 dark:bg-slate-700 rounded-full relative">
-                            <div className="absolute left-1 top-1 w-4 h-4 bg-white rounded-full shadow-sm" />
-                          </div>
-                       </div>
-                    </div>
-                  </div>
-                </div>
-              )}
+              {activeTab === 'settings' && <Settings user={user} />}
             </motion.div>
           </AnimatePresence>
         </div>

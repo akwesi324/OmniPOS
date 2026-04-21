@@ -1,5 +1,16 @@
 {
   "entities": {
+    "SystemConfig": {
+      "title": "SystemConfig",
+      "description": "Sensitive global system settings",
+      "type": "object",
+      "properties": {
+        "paystackPublicKey": { "type": "string" },
+        "paystackSecretKey": { "type": "string" },
+        "updatedAt": { "type": "string", "format": "date-time" },
+        "updatedBy": { "type": "string" }
+      }
+    },
     "User": {
       "title": "User",
       "description": "System user with roles",
@@ -131,6 +142,10 @@
     "/purchaseOrders/{orderId}": {
       "schema": "PurchaseOrder",
       "description": "Purchase order records"
+    },
+    "/config/system": {
+      "schema": "SystemConfig",
+      "description": "Global system configurations including sensitive API keys"
     }
   }
 }
