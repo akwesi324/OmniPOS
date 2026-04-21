@@ -8,6 +8,23 @@ import { v4 as uuidv4 } from 'uuid';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+// Paystack MoMo Helpers
+const PAYSTACK_BASE_URL = 'https://api.paystack.co';
+
+function normalizePhone(phone: string): string {
+  const cleaned = phone.trim().replace(/\s/g, '').replace(/-/g, '');
+  if (cleaned.startsWith('0') && cleaned.length === 10 && /^\d+$/.test(cleaned)) {
+    return cleaned;
+  }
+  if (cleaned.startsWith('+233') && cleaned.length === 13 && /^\d+$/.test(cleaned.substring(1))) {
+    return '0' + cleaned.substring(4);
+  }
+  if (cleaned.startsWith('233') && cleaned.length === 12 && /^\d+$/.test(cleaned)) {
+    return '0' + cleaned.substring(3);
+  }
+  return cleaned;
+}
+
 async function startServer() {
   const app = express();
   const PORT = 3000;
@@ -22,50 +39,134 @@ async function startServer() {
     });
   });
 
-  // Paystack Initialization
+  // Paystack Initialization (Mobile Money Ghana)
   app.post('/api/payments/paystack/initialize', async (req, res) => {
-    const { email, amount, metadata, phone, channel } = req.body;
+    const { amount, phone, provider, email } = req.body;
+    
+    if (!process.env.PAYSTACK_SECRET_KEY) {
+      return res.status(500).json({ status: false, message: 'PAYSTACK_SECRET_KEY is not configured in secrets.' });
+    }
+
+    const normalizedPhone = normalizePhone(phone || '');
+    const amountPesewas = Math.round(amount * 100);
+    const reference = `POS-${uuidv4().substring(0, 14).toUpperCase()}`;
+
     try {
-      const reference = `pstk_ref_${uuidv4()}`;
-      if (channel === 'mobile_money') {
-        console.log(`[Paystack] Mobile Money payment initiated for ${phone}. OTP simulated.`);
-      }
-      res.json({
-        status: true,
-        data: {
-          authorization_url: 'https://checkout.paystack.com/' + reference,
-          access_code: 'codesimulated',
-          reference: reference
+      const response = await axios.post(`${PAYSTACK_BASE_URL}/charge`, {
+        email: email || `momo_${normalizedPhone}@pos.store`,
+        amount: amountPesewas,
+        currency: 'GHS',
+        reference,
+        mobile_money: {
+          phone: normalizedPhone,
+          provider: provider || 'mtn',
+        }
+      }, {
+        headers: {
+          Authorization: `Bearer ${process.env.PAYSTACK_SECRET_KEY}`,
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
         }
       });
-    } catch (error) {
-      res.status(500).json({ status: false, message: 'Paystack initialization failed' });
-    }
-  });
 
-  // Paystack Verification
-  app.get('/api/payments/paystack/verify/:reference', async (req, res) => {
-    const { reference } = req.params;
-    try {
-      const isSuccess = !reference.toLowerCase().includes('fail');
-      if (isSuccess) {
+      if (response.data.status) {
         res.json({
           status: true,
-          message: 'Verification successful',
           data: {
-            status: 'success',
-            reference: reference,
-            amount: 100
+            reference: response.data.data.reference || reference,
+            status: response.data.data.status,
+            display_text: response.data.data.display_text || 'Awaiting customer authorisation…'
           }
         });
       } else {
-        res.status(400).json({
-          status: false,
-          message: 'Transaction failed',
-          data: { status: 'failed' }
-        });
+        res.status(400).json({ status: false, message: response.data.message || 'Charge failed' });
       }
-    } catch (error) {
+    } catch (error: any) {
+      const message = error.response?.data?.message || error.response?.data?.data?.message || 'Paystack initialization failed';
+      res.status(500).json({ status: false, message });
+    }
+  });
+
+  // Paystack Submit OTP
+  app.post('/api/payments/paystack/submit-otp', async (req, res) => {
+    const { reference, otp } = req.body;
+
+    if (!process.env.PAYSTACK_SECRET_KEY) {
+      return res.status(500).json({ status: false, message: 'PAYSTACK_SECRET_KEY is not configured' });
+    }
+
+    try {
+      const response = await axios.post(`${PAYSTACK_BASE_URL}/charge/submit_otp`, {
+        reference,
+        otp
+      }, {
+        headers: {
+          Authorization: `Bearer ${process.env.PAYSTACK_SECRET_KEY}`,
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        }
+      });
+
+      if (response.data.status) {
+        res.json({
+          status: true,
+          data: response.data.data
+        });
+      } else {
+        res.status(400).json({ status: false, message: response.data.message || 'OTP submission failed' });
+      }
+    } catch (error: any) {
+      const message = error.response?.data?.message || error.response?.data?.data?.message || 'OTP submission error';
+      res.status(500).json({ status: false, message });
+    }
+  });
+
+  // Paystack Verification (Charge API)
+  app.get('/api/payments/paystack/verify/:reference', async (req, res) => {
+    const { reference } = req.params;
+
+    if (!process.env.PAYSTACK_SECRET_KEY) {
+      return res.status(500).json({ status: false, message: 'PAYSTACK_SECRET_KEY is not configured' });
+    }
+
+    try {
+      const response = await axios.get(`${PAYSTACK_BASE_URL}/charge/${encodeURIComponent(reference)}`, {
+        headers: {
+          Authorization: `Bearer ${process.env.PAYSTACK_SECRET_KEY}`,
+          'Accept': 'application/json'
+        }
+      });
+
+      if (response.data.status) {
+        const data = response.data.data;
+        const tx_status = data.status;
+        
+        let status = 'pending';
+        if (tx_status === 'success') status = 'success';
+        else if (['failed', 'abandoned'].includes(tx_status)) status = 'failed';
+
+        const messageParts: string[] = [];
+        ['display_text', 'message', 'gateway_response'].forEach(key => {
+          if (data[key]) {
+            const text = String(data[key]).trim();
+            if (text && !messageParts.includes(text)) messageParts.push(text);
+          }
+        });
+
+        res.json({
+          status: true,
+          data: {
+            status,
+            raw_status: tx_status,
+            reference: data.reference,
+            amount: data.amount / 100,
+            message: messageParts.join(' | ') || 'Transaction status fetched'
+          }
+        });
+      } else {
+        res.json({ status: false, message: response.data.message || 'Verification failed' });
+      }
+    } catch (error: any) {
       res.status(500).json({ status: false, message: 'Error during Paystack verification' });
     }
   });
@@ -111,13 +212,8 @@ async function startServer() {
   app.get('/api/payments/flutterwave/verify/:transaction_id', async (req, res) => {
     const { transaction_id } = req.params;
     const { tx_ref } = req.query;
-
-    // In a real implementation, you would call:
-    // https://api.flutterwave.com/v3/transactions/:id/verify
     
     try {
-      // For the school project demo, we simulate a successful verification
-      // unless the transaction_id contains 'fail'
       const isSuccess = !transaction_id.toLowerCase().includes('fail');
 
       if (isSuccess) {
@@ -127,7 +223,7 @@ async function startServer() {
           data: {
             id: transaction_id,
             tx_ref: tx_ref,
-            amount: 100, // In real app, get from API
+            amount: 100, 
             currency: 'GHS',
             status: 'successful'
           }
