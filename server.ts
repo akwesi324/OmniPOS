@@ -16,16 +16,23 @@ const __dirname = path.dirname(__filename);
 const PAYSTACK_BASE_URL = 'https://api.paystack.co';
 
 function normalizePhone(phone: string): string {
-  const cleaned = phone.trim().replace(/\s/g, '').replace(/-/g, '');
-  if (cleaned.startsWith('0') && cleaned.length === 10 && /^\d+$/.test(cleaned)) {
+  const cleaned = phone.trim().replace(/\s/g, '').replace(/-/g, '').replace(/\+/g, '');
+  
+  // If it's 10 digits starting with 0, it's already perfect
+  if (/^0\d{9}$/.test(cleaned)) {
     return cleaned;
   }
-  if (cleaned.startsWith('+233') && cleaned.length === 13 && /^\d+$/.test(cleaned.substring(1))) {
-    return '0' + cleaned.substring(4);
-  }
-  if (cleaned.startsWith('233') && cleaned.length === 12 && /^\d+$/.test(cleaned)) {
+  
+  // If it starts with 233 and is 12 digits, convert to 10 digits starting with 0
+  if (/^233\d{9}$/.test(cleaned)) {
     return '0' + cleaned.substring(3);
   }
+  
+  // If it's 9 digits (missing leading 0), add it
+  if (/^\d{9}$/.test(cleaned)) {
+    return '0' + cleaned;
+  }
+  
   return cleaned;
 }
 
@@ -47,31 +54,38 @@ async function startServer() {
   app.post('/api/payments/paystack/initialize', async (req, res) => {
     const { amount, phone, provider, email } = req.body;
     
-    if (!process.env.PAYSTACK_SECRET_KEY) {
+    const rawSecret = process.env.PAYSTACK_SECRET_KEY;
+    if (!rawSecret) {
       return res.status(500).json({ status: false, message: 'PAYSTACK_SECRET_KEY is not configured in secrets.' });
     }
+    const secretKey = rawSecret.trim().replace(/^Bearer\s+/i, '');
 
     const normalizedPhone = normalizePhone(phone || '');
-    const amountPesewas = Math.round(amount * 100);
+    const amountPesewas = Math.round(Number(amount) * 100);
     const reference = `POS-${uuidv4().substring(0, 14).toUpperCase()}`;
 
-    console.log(`[PAYSTACK] Intent: ${normalizedPhone} | GHS ${amount} | Ref: ${reference}`);
+    if (isNaN(amountPesewas) || amountPesewas < 100) {
+      return res.status(400).json({ status: false, message: 'Invalid amount. Minimum GHS 1.00 is required.' });
+    }
+
+    const payload = {
+      email: email || `momo_${normalizedPhone}@pos.store`,
+      amount: amountPesewas,
+      currency: 'GHS',
+      reference,
+      mobile_money: {
+        phone: normalizedPhone,
+        provider: provider || 'mtn',
+      }
+    };
+
+    console.log(`[PAYSTACK] Charging ${normalizedPhone} GHS ${amount}`);
 
     try {
-      const response = await axios.post(`${PAYSTACK_BASE_URL}/charge`, {
-        email: email || `momo_${normalizedPhone}@pos.store`,
-        amount: amountPesewas,
-        currency: 'GHS',
-        reference,
-        mobile_money: {
-          phone: normalizedPhone,
-          provider: provider || 'mtn',
-        }
-      }, {
+      const response = await axios.post(`${PAYSTACK_BASE_URL}/charge`, payload, {
         headers: {
-          Authorization: `Bearer ${process.env.PAYSTACK_SECRET_KEY}`,
-          'Content-Type': 'application/json',
-          'Accept': 'application/json'
+          Authorization: `Bearer ${secretKey}`,
+          'Content-Type': 'application/json'
         }
       });
 
@@ -90,8 +104,9 @@ async function startServer() {
         res.status(400).json({ status: false, message: response.data.message || 'Charge failed' });
       }
     } catch (error: any) {
-      console.error(`[PAYSTACK] Error:`, JSON.stringify(error.response?.data || error.message, null, 2));
-      const message = error.response?.data?.message || 'Paystack initialization failed';
+      const errorData = error.response?.data;
+      console.error(`[PAYSTACK] Error:`, JSON.stringify(errorData || error.message, null, 2));
+      const message = errorData?.message || errorData?.data?.message || error.message || 'Paystack initialization failed';
       res.status(500).json({ status: false, message });
     }
   });
