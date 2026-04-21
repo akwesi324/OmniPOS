@@ -54,7 +54,7 @@ async function startServer() {
   app.post('/api/payments/paystack/initialize', async (req, res) => {
     const { amount, phone, provider, email } = req.body;
     
-    const rawSecret = process.env.PAYSTACK_SECRET_KEY;
+    const rawSecret = process.env.PAYSTACK_SECRET_KEY || 'sk_live_7ae454186282ac8ffcc646f103e227b0f885954f';
     if (!rawSecret) {
       return res.status(500).json({ status: false, message: 'PAYSTACK_SECRET_KEY is not configured in secrets.' });
     }
@@ -115,7 +115,8 @@ async function startServer() {
   app.post('/api/payments/paystack/submit-otp', async (req, res) => {
     const { reference, otp } = req.body;
 
-    if (!process.env.PAYSTACK_SECRET_KEY) {
+    const secretKey = process.env.PAYSTACK_SECRET_KEY || 'sk_live_7ae454186282ac8ffcc646f103e227b0f885954f';
+    if (!secretKey) {
       return res.status(500).json({ status: false, message: 'PAYSTACK_SECRET_KEY is not configured' });
     }
 
@@ -125,7 +126,7 @@ async function startServer() {
         otp
       }, {
         headers: {
-          Authorization: `Bearer ${process.env.PAYSTACK_SECRET_KEY}`,
+          Authorization: `Bearer ${secretKey}`,
           'Content-Type': 'application/json',
           'Accept': 'application/json'
         }
@@ -149,14 +150,15 @@ async function startServer() {
   app.get('/api/payments/paystack/verify/:reference', async (req, res) => {
     const { reference } = req.params;
 
-    if (!process.env.PAYSTACK_SECRET_KEY) {
+    const secretKey = process.env.PAYSTACK_SECRET_KEY || 'sk_live_7ae454186282ac8ffcc646f103e227b0f885954f';
+    if (!secretKey) {
       return res.status(500).json({ status: false, message: 'PAYSTACK_SECRET_KEY is not configured' });
     }
 
     try {
       const response = await axios.get(`${PAYSTACK_BASE_URL}/charge/${encodeURIComponent(reference)}`, {
         headers: {
-          Authorization: `Bearer ${process.env.PAYSTACK_SECRET_KEY}`,
+          Authorization: `Bearer ${secretKey}`,
           'Accept': 'application/json'
         }
       });
