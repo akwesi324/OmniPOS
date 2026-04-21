@@ -35,4 +35,30 @@
     background: #e2e8f0;
     border-radius: 10px;
   }
+
+  @media print {
+    body * {
+      visibility: hidden;
+    }
+    .printable-receipt, .printable-receipt * {
+      visibility: visible;
+    }
+    .printable-receipt {
+      position: absolute;
+      left: 0;
+      top: 0;
+      width: 100%;
+      height: auto;
+      background: white !important;
+      color: black !important;
+      padding: 20px !important;
+      box-shadow: none !important;
+      border: none !important;
+    }
+    /* Hide buttons and interactive elements during print */
+    .printable-receipt button,
+    .printable-receipt .no-print {
+      display: none !important;
+    }
+  }
 }
