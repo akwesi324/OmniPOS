@@ -53,6 +53,16 @@ async function startServer() {
 
   app.use(express.json());
 
+  app.get('/api/health', (req, res) => {
+    res.json({ status: 'ok', message: 'API server is running', version: '1.0.1' });
+  });
+
+  // Debug logger for all API requests
+  app.use('/api', (req, res, next) => {
+    console.log(`[API DEBUG] ${req.method} ${req.url}`);
+    next();
+  });
+
   // Serve firebase-applet-config.json if it exists in root
   app.get('/firebase-applet-config.json', (req, res, next) => {
     const configPath = path.join(process.cwd(), 'firebase-applet-config.json');
@@ -63,10 +73,12 @@ async function startServer() {
 
   // Paystack Initialization (Mobile Money Ghana)
   app.post('/api/payments/paystack/initialize', async (req, res) => {
+    console.log('[PAYSTACK] Received initialization request:', req.body);
     const { amount, phone, provider, email } = req.body;
     
     const secretKey = getPaystackSecretKey();
     if (!secretKey || secretKey.startsWith('pk_')) {
+      console.error('[PAYSTACK] Invalid secret key configuration');
       return res.status(500).json({ 
         status: false, 
         message: secretKey.startsWith('pk_') 

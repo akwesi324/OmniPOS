@@ -167,7 +167,15 @@ export default function POSTerminal() {
         throw new Error(errorMsg);
       }
 
-      const result = await response.json();
+      let result;
+      const contentType = response.headers.get('content-type');
+      if (contentType && contentType.includes('application/json')) {
+        result = await response.json();
+      } else {
+        const text = await response.text();
+        console.error('Expected JSON but received:', text.substring(0, 200));
+        throw new Error('Server returned an invalid response. Please try again.');
+      }
       
       if (result.status === true || result.status === 'success') {
         const data = result.data;
@@ -211,7 +219,15 @@ export default function POSTerminal() {
           throw new Error(errorText || 'OTP Submission Failed');
         }
 
-        const otpResult = await otpRes.json();
+        let otpResult;
+        const contentType = otpRes.headers.get('content-type');
+        if (contentType && contentType.includes('application/json')) {
+          otpResult = await otpRes.json();
+        } else {
+          const text = await otpRes.text();
+          console.error('OTP: Expected JSON but received:', text.substring(0, 200));
+          throw new Error('Verification server returned an invalid response.');
+        }
         
         if (!otpResult.status) {
           setPaymentStatus('otp_required');
