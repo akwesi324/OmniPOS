@@ -15,6 +15,17 @@ const __dirname = path.dirname(__filename);
 // Paystack MoMo Helpers
 const PAYSTACK_BASE_URL = 'https://api.paystack.co';
 
+function getPaystackSecretKey(): string {
+  const rawKey = process.env.PAYSTACK_SECRET_KEY || 'sk_live_7ae454186282ac8ffcc646f103e227b0f885954f';
+  // Robust cleaning: remove "Bearer ", leading/trailing quotes, commas, and whitespace
+  // A standard Paystack key should look like sk_live_... or sk_test_...
+  const cleaned = rawKey.trim()
+    .replace(/^Bearer\s+/i, '')
+    .replace(/["',)]/g, '') // Remove quotes, commas, parentheses commonly copied from chat/code
+    .trim();
+  return cleaned;
+}
+
 function normalizePhone(phone: string): string {
   const cleaned = phone.trim().replace(/\s/g, '').replace(/-/g, '').replace(/\+/g, '');
   
@@ -54,11 +65,15 @@ async function startServer() {
   app.post('/api/payments/paystack/initialize', async (req, res) => {
     const { amount, phone, provider, email } = req.body;
     
-    const rawSecret = process.env.PAYSTACK_SECRET_KEY || 'sk_live_7ae454186282ac8ffcc646f103e227b0f885954f';
-    if (!rawSecret) {
-      return res.status(500).json({ status: false, message: 'PAYSTACK_SECRET_KEY is not configured in secrets.' });
+    const secretKey = getPaystackSecretKey();
+    if (!secretKey || secretKey.startsWith('pk_')) {
+      return res.status(500).json({ 
+        status: false, 
+        message: secretKey.startsWith('pk_') 
+          ? 'Invalid Key: You are using a Public Key instead of a Secret Key.' 
+          : 'PAYSTACK_SECRET_KEY is not configured.' 
+      });
     }
-    const secretKey = rawSecret.trim().replace(/^Bearer\s+/i, '');
 
     const normalizedPhone = normalizePhone(phone || '');
     const amountPesewas = Math.round(Number(amount) * 100);
@@ -115,7 +130,7 @@ async function startServer() {
   app.post('/api/payments/paystack/submit-otp', async (req, res) => {
     const { reference, otp } = req.body;
 
-    const secretKey = process.env.PAYSTACK_SECRET_KEY || 'sk_live_7ae454186282ac8ffcc646f103e227b0f885954f';
+    const secretKey = getPaystackSecretKey();
     if (!secretKey) {
       return res.status(500).json({ status: false, message: 'PAYSTACK_SECRET_KEY is not configured' });
     }
@@ -150,7 +165,7 @@ async function startServer() {
   app.get('/api/payments/paystack/verify/:reference', async (req, res) => {
     const { reference } = req.params;
 
-    const secretKey = process.env.PAYSTACK_SECRET_KEY || 'sk_live_7ae454186282ac8ffcc646f103e227b0f885954f';
+    const secretKey = getPaystackSecretKey();
     if (!secretKey) {
       return res.status(500).json({ status: false, message: 'PAYSTACK_SECRET_KEY is not configured' });
     }

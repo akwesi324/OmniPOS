@@ -155,6 +155,18 @@ export default function POSTerminal() {
         })
       });
 
+      if (!response.ok) {
+        const errorText = await response.text();
+        let errorMsg = 'Failed to connect to payment server';
+        try {
+          const errorJson = JSON.parse(errorText);
+          errorMsg = errorJson.message || errorMsg;
+        } catch (e) {
+          errorMsg = errorText || errorMsg;
+        }
+        throw new Error(errorMsg);
+      }
+
       const result = await response.json();
       
       if (result.status === true || result.status === 'success') {
@@ -169,9 +181,10 @@ export default function POSTerminal() {
         setPaymentStatus('error');
         setErrorMessage(result.message || 'Failed to initialize payment gateway');
       }
-    } catch (error) {
+    } catch (error: any) {
+      console.error('Payment Error:', error);
       setPaymentStatus('error');
-      setErrorMessage('Could not connect to payment server');
+      setErrorMessage(error.message || 'Could not connect to payment server');
     }
   };
 
@@ -192,6 +205,12 @@ export default function POSTerminal() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ reference: txRef, otp })
         });
+        
+        if (!otpRes.ok) {
+          const errorText = await otpRes.text();
+          throw new Error(errorText || 'OTP Submission Failed');
+        }
+
         const otpResult = await otpRes.json();
         
         if (!otpResult.status) {
@@ -202,9 +221,10 @@ export default function POSTerminal() {
       }
 
       setPaymentStatus('waiting');
-    } catch (err) {
+    } catch (err: any) {
+      console.error('OTP Verification Error:', err);
       setPaymentStatus('error');
-      setErrorMessage('Network error during verification');
+      setErrorMessage(err.message || 'Network error during verification');
     }
   };
 
