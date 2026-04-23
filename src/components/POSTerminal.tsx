@@ -101,7 +101,7 @@ export default function POSTerminal() {
           const verifyResult = await verifyRes.json();
           
           if (verifyResult.status === true) {
-            const txStatus = verifyResult.data?.status;
+            const txStatus = verifyResult.data?.status; // sucess, failed, otp_required, waiting
             
             if (txStatus === 'success') {
               completeSale();
@@ -110,6 +110,13 @@ export default function POSTerminal() {
               setPaymentStatus('error');
               setErrorMessage(verifyResult.data?.message || 'Transaction failed or was declined.');
               clearInterval(interval);
+            } else if (txStatus === 'otp_required' && paymentStatus !== 'otp_required') {
+              // If the gateway suddenly asks for OTP while we were just waiting
+              setPaymentStatus('otp_required');
+              setTransactionDetails(prev => ({ ...prev, ...verifyResult.data }));
+            } else if (txStatus === 'waiting' && paymentStatus === 'otp_required') {
+              // If OTP was accepted but we are now waiting for final bank/momo auth
+              setPaymentStatus('waiting');
             }
           }
         } catch (err) {
@@ -247,9 +254,20 @@ export default function POSTerminal() {
           setErrorMessage(otpResult.message || 'OTP Submission Failed');
           return;
         }
-      }
 
-      setPaymentStatus('waiting');
+        // If the OTP submission response itself has a final status
+        if (otpResult.data?.status === 'success') {
+          completeSale();
+        } else if (otpResult.data?.status === 'failed') {
+          setPaymentStatus('error');
+          setErrorMessage(otpResult.data.message || 'Transaction failed after OTP');
+        } else {
+          setPaymentStatus('waiting');
+          setTransactionDetails(prev => ({ ...prev, ...otpResult.data }));
+        }
+      } else {
+        setPaymentStatus('waiting');
+      }
     } catch (err: any) {
       console.error('OTP Verification Error:', err);
       setPaymentStatus('error');
@@ -364,7 +382,11 @@ export default function POSTerminal() {
                         {paymentStatus === 'otp_required' && 'OTP Verification'}
                       </h3>
                       <p className="text-sm text-slate-500">
-                        {paymentStatus === 'otp_required' ? `An OTP has been sent to ${phoneNumber}.` : paymentStatus === 'waiting' ? 'Please complete the prompt on your mobile device.' : 'Finalizing transaction details...'}
+                        {paymentStatus === 'otp_required' 
+                          ? `An OTP has been sent to ${phoneNumber}.` 
+                          : paymentStatus === 'waiting' 
+                          ? (transactionDetails?.display_text || 'Please complete the prompt on your mobile device.') 
+                          : 'Finalizing transaction details...'}
                       </p>
                     </div>
                     

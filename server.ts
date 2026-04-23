@@ -167,9 +167,23 @@ async function startServer() {
       });
 
       if (response.data.status) {
+        const data = response.data.data;
+        const tx_status = data.status;
+        
+        let status = 'pending';
+        if (tx_status === 'success') status = 'success';
+        else if (['failed', 'abandoned'].includes(tx_status)) status = 'failed';
+        else if (tx_status === 'send_otp') status = 'otp_required';
+        else if (['pending', 'processing', 'ongoing'].includes(tx_status)) status = 'waiting';
+
         res.json({
           status: true,
-          data: response.data.data
+          data: {
+            ...data,
+            status,
+            raw_status: tx_status,
+            display_text: data.display_text || data.gateway_response || 'OTP accepted, finishing...'
+          }
         });
       } else {
         res.status(400).json({ status: false, message: response.data.message || 'OTP submission failed' });
@@ -200,15 +214,18 @@ async function startServer() {
 
       if (response.data.status) {
         const data = response.data.data;
-        const tx_status = data.status;
+        const tx_status = data.status; // e.g., 'success', 'failed', 'send_otp', 'pending', 'processing'
         console.log(`[PAYSTACK] Transaction ${reference} status: ${tx_status}`);
         
         let status = 'pending';
         if (tx_status === 'success') status = 'success';
         else if (['failed', 'abandoned'].includes(tx_status)) status = 'failed';
+        else if (tx_status === 'send_otp') status = 'otp_required';
+        else if (['pending', 'processing', 'ongoing'].includes(tx_status)) status = 'waiting';
 
         const messageParts: string[] = [];
-        ['display_text', 'message', 'gateway_response'].forEach(key => {
+        // Priority for user-facing text
+        ['display_text', 'gateway_response', 'message'].forEach(key => {
           if (data[key]) {
             const text = String(data[key]).trim();
             if (text && !messageParts.includes(text)) messageParts.push(text);
@@ -222,6 +239,7 @@ async function startServer() {
             raw_status: tx_status,
             reference: data.reference,
             amount: data.amount / 100,
+            display_text: data.display_text || data.gateway_response || 'Processing transaction...',
             message: messageParts.join(' | ') || 'Transaction status fetched'
           }
         });
