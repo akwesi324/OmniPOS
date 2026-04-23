@@ -1,62 +1,111 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Helper functions
-    function isSignedIn() {
-      return request.auth != null;
-    }
     
-    function isAdmin() {
-      return isSignedIn() && 
-        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
-    }
-
-    // Default deny
+    // 0. Global Safety Net
     match /{document=**} {
       allow read, write: if false;
     }
 
-    // Configuration - STRICTLY ADMIN ONLY
+    // --- PHASE 3: Primitives ---
+    function isSignedIn() { return request.auth != null; }
+    function isValidId(id) { return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$'); }
+    function incoming() { return request.resource.data; }
+    function existing() { return resource.data; }
+    function isVerified() { return isSignedIn() && request.auth.token.email_verified == true; }
+    
+    // Admin check with email bootstrap
+    function isAdmin() { 
+      return isSignedIn() && (
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin') ||
+        request.auth.token.email == 'screw.yt18@gmail.com'
+      ); 
+    }
+
+    // --- PHASE 2: Entity Validations ---
+    function isValidUser(u) {
+      return u.keys().hasAll(['uid', 'email', 'role']) &&
+             u.uid == request.auth.uid &&
+             u.email is string && u.email.size() <= 100 &&
+             u.role in ['admin', 'manager', 'cashier'];
+    }
+
+    function isValidProduct(p) {
+      return p.keys().hasAll(['name', 'price', 'stockLevel']) &&
+             p.name is string && p.name.size() <= 200 &&
+             p.price is number && p.price >= 0 &&
+             p.stockLevel is int && p.stockLevel >= 0;
+    }
+
+    function isValidSale(s) {
+      return s.keys().hasAll(['date', 'cashierId', 'totalAmount', 'paymentMethod', 'items']) &&
+             s.date == request.time &&
+             s.cashierId == request.auth.uid &&
+             s.totalAmount is number && s.totalAmount >= 0 &&
+             s.items is list && s.items.size() <= 100;
+    }
+
+    function isValidCustomer(c) {
+      return c.keys().hasAll(['name', 'email']) &&
+             c.name is string && c.name.size() <= 100 &&
+             c.email is string && c.email.size() <= 100;
+    }
+
+    // --- PHASE 4: Match Blocks ---
+
+    // 1. Users
+    match /users/{userId} {
+      allow read: if isSignedIn() && (request.auth.uid == userId || isAdmin());
+      allow create: if isVerified() && request.auth.uid == userId && isValidUser(incoming());
+      allow update: if (isAdmin() || (isVerified() && request.auth.uid == userId && incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'photoURL'])));
+    }
+
+    // 2. Products
+    match /products/{productId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin() && isValidId(productId) && isValidProduct(incoming());
+    }
+
+    // 3. Customers
+    match /customers/{customerId} {
+      allow read: if isSignedIn();
+      allow create: if isVerified() && isValidId(customerId) && isValidCustomer(incoming());
+      allow update: if isVerified() && isValidId(customerId) && (
+        isAdmin() || 
+        incoming().diff(existing()).affectedKeys().hasOnly(['phone', 'address', 'loyaltyPoints'])
+      );
+    }
+
+    // 4. Sales
+    match /sales/{saleId} {
+      allow read: if isSignedIn();
+      allow create: if isVerified() && isValidId(saleId) && isValidSale(incoming()) &&
+                    // Verify relational integrity
+                    (incoming().customerId == null || exists(/databases/$(database)/documents/customers/$(incoming().customerId)));
+      allow update: if isAdmin();
+    }
+
+    // 5. Payment Requests
+    match /paymentRequests/{requestId} {
+      allow read: if isSignedIn() && (isAdmin() || existing().cashierId == request.auth.uid);
+      allow create: if isVerified() && isValidId(requestId) && incoming().cashierId == request.auth.uid;
+      allow update: if isAdmin() || (isVerified() && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'metadata']));
+    }
+
+    // 6. System Config
     match /config/system {
       allow read, write: if isAdmin();
     }
 
-    // Users
-    match /users/{userId} {
-      allow read: if isSignedIn();
-      allow write: if isAdmin() || (isSignedIn() && request.auth.uid == userId);
-    }
-
-    // Products
-    match /products/{productId} {
+    // 7. Suppliers & Orders
+    match /suppliers/{supplierId} {
       allow read: if isSignedIn();
       allow write: if isAdmin();
     }
-
-    // Customers
-    match /customers/{customerId} {
-      allow read, write: if isSignedIn();
-    }
-
-    // Sales
-    match /sales/{saleId} {
-      allow read: if isSignedIn();
-      allow create: if isSignedIn();
-      allow update, delete: if isAdmin();
-    }
-
-    // Payment Requests
-    match /paymentRequests/{requestId} {
-      allow read: if isSignedIn();
-      allow write: if isSignedIn();
-    }
-
-    // Suppliers & Purchase Orders
-    match /suppliers/{supplierId} {
-      allow read, write: if isAdmin();
-    }
     match /purchaseOrders/{orderId} {
-      allow read, write: if isAdmin();
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
     }
   }
 }

@@ -17,6 +17,8 @@ import {
   Moon,
   Zap
 } from 'lucide-react';
+import { getAuth, onAuthStateChanged, signInWithPopup, GoogleAuthProvider, signOut } from 'firebase/auth';
+import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { getFirebase } from './lib/firebase';
 import type { User } from './types';
 
@@ -35,21 +37,67 @@ export default function App() {
   const [isAuthReady, setIsAuthReady] = useState(false);
 
   useEffect(() => {
-    const checkAuth = async () => {
+    let unsubscribe: () => void;
+    
+    const setupAuth = async () => {
       const fb = await getFirebase();
       if (!fb) {
+        // Mock mode if Firebase is not available
         setUser({
           uid: 'mock-1',
           email: 'admin@omnipos.com',
-          displayName: 'Administrator',
+          displayName: 'Administrator (Mock)',
           role: 'admin',
           createdAt: new Date().toISOString()
         });
+        setIsAuthReady(true);
+        return;
       }
-      setIsAuthReady(true);
+
+      unsubscribe = onAuthStateChanged(fb.auth, async (firebaseUser) => {
+        if (firebaseUser) {
+          // Get user data from Firestore
+          const userDoc = await getDoc(doc(fb.db, 'users', firebaseUser.uid));
+          
+          if (userDoc.exists()) {
+            setUser(userDoc.data() as User);
+          } else {
+            // New user - default to cashier or admin if email matches
+            const isDefaultAdmin = firebaseUser.email === 'screw.yt18@gmail.com';
+            const newUser: User = {
+              uid: firebaseUser.uid,
+              email: firebaseUser.email || '',
+              displayName: firebaseUser.displayName || 'User',
+              role: isDefaultAdmin ? 'admin' : 'cashier',
+              createdAt: new Date().toISOString()
+            };
+            
+            await setDoc(doc(fb.db, 'users', firebaseUser.uid), newUser);
+            setUser(newUser);
+          }
+        } else {
+          setUser(null);
+        }
+        setIsAuthReady(true);
+      });
     };
-    checkAuth();
+
+    setupAuth();
+    return () => unsubscribe?.();
   }, []);
+
+  const handleLogin = async () => {
+    const fb = await getFirebase();
+    if (!fb) return;
+    const provider = new GoogleAuthProvider();
+    await signInWithPopup(fb.auth, provider);
+  };
+
+  const handleLogout = async () => {
+    const fb = await getFirebase();
+    if (!fb) return;
+    await signOut(fb.auth);
+  };
 
   if (!isAuthReady) {
     return (
@@ -59,6 +107,34 @@ export default function App() {
           transition={{ repeat: Infinity, duration: 1, ease: "linear" }}
           className="w-10 h-10 border-4 border-blue-600 border-t-transparent rounded-full shadow-lg shadow-blue-100"
         />
+      </div>
+    );
+  }
+
+  if (!user && isAuthReady) {
+    return (
+      <div className="h-screen w-full flex items-center justify-center bg-slate-50 p-6">
+        <motion.div 
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="max-w-md w-full bg-white p-12 rounded-[3.5rem] shadow-2xl shadow-slate-200/50 border border-slate-100 flex flex-col items-center text-center space-y-10"
+        >
+          <div className="w-24 h-24 bg-blue-600 rounded-[2.5rem] flex items-center justify-center text-white shadow-2xl shadow-blue-500/40">
+            <ShoppingCart size={48} />
+          </div>
+          <div className="space-y-3">
+            <h1 className="text-4xl font-black text-slate-900 tracking-tight">OmniPOS</h1>
+            <p className="text-slate-400 font-medium leading-relaxed">Secure Point of Sale Management System. Please sign in to continue.</p>
+          </div>
+          <button 
+            onClick={handleLogin}
+            className="w-full py-5 bg-slate-900 hover:bg-black text-white rounded-2xl font-black text-sm uppercase tracking-widest flex items-center justify-center gap-4 transition-all hover:scale-[1.02] active:scale-[0.98] shadow-xl shadow-slate-900/10"
+          >
+            <Zap size={20} className="fill-yellow-400 text-yellow-400" />
+            Continue with Google
+          </button>
+          <p className="text-[10px] font-black text-slate-300 uppercase tracking-widest">Enterprise Edition • v2.0.4</p>
+        </motion.div>
       </div>
     );
   }
@@ -122,7 +198,10 @@ export default function App() {
         </nav>
 
         <div className="p-4 w-full">
-          <button className="w-full flex items-center gap-4 p-3 rounded-xl text-slate-400 hover:bg-slate-800 hover:text-red-400 transition-all font-semibold group">
+          <button 
+            onClick={handleLogout}
+            className="w-full flex items-center gap-4 p-3 rounded-xl text-slate-400 hover:bg-slate-800 hover:text-red-400 transition-all font-semibold group cursor-pointer"
+          >
             <LogOut size={22} />
             {isSidebarOpen && <span className="text-sm">Logout</span>}
           </button>
