@@ -573,7 +573,7 @@ export default function POSTerminal() {
                     <div className="w-16 h-16 bg-blue-600 rounded-2xl flex items-center justify-center mx-auto shadow-lg shadow-blue-500/30 no-print">
                        <Printer size={32} className="text-white" />
                     </div>
-                    <h3 className="text-xl font-black text-slate-900 dark:text-white uppercase tracking-tight">Receipt</h3>
+                    <h3 className="text-xl font-black text-slate-900 dark:text-white uppercase tracking-tight">OmniPOS system</h3>
                     <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">{lastOrderDetails.orderId}</p>
                  </div>
 

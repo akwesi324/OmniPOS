@@ -272,7 +272,7 @@ export default function InventoryManager() {
     
     try {
       const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
-      const prompt = `You are a professional procurement officer at OmniPOS, a modern retail point-of-sale system. 
+      const prompt = `You are a professional procurement officer at OmniPOS system, a modern retail point-of-sale system. 
       Generate a professional, formal purchase order email to our supplier, ${po.supplier}.
       
       Order Details:
@@ -296,14 +296,14 @@ export default function InventoryManager() {
 
       const data = JSON.parse(response.text);
       setGeneratedEmail({
-        subject: data.subject || `Purchase Order ${po.id} - OmniPOS`,
+        subject: data.subject || `Purchase Order ${po.id} - OmniPOS system`,
         body: data.body || `Dear ${po.supplier} Team,\n\nPlease find attached the purchase order ${po.id}.\n\nBest regards.`
       });
       setEmailStatus('idle');
     } catch (error) {
       console.error("Gemini failed:", error);
       setGeneratedEmail({
-        subject: `Purchase Order ${po.id} - OmniPOS`,
+        subject: `Purchase Order ${po.id} - OmniPOS system`,
         body: `Dear ${po.supplier} Team,\n\nPlease process our Purchase Order ${po.id} for a total of GHS ${po.total.toFixed(2)}.\n\nBest regards,\nProcurement Team`
       });
       setEmailStatus('idle');

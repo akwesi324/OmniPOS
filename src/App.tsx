@@ -90,7 +90,7 @@ export default function App() {
               animate={{ opacity: 1 }}
               className="font-bold text-xl tracking-tight text-white"
             >
-              OmniPOS
+              OmniPOS system
             </motion.span>
           )}
         </div>
