@@ -5,9 +5,13 @@ import { fileURLToPath } from 'url';
 import axios from 'axios';
 import { v4 as uuidv4 } from 'uuid';
 import dotenv from 'dotenv';
+import { EventEmitter } from 'events';
 
 // Load environment variables
 dotenv.config();
+
+// Increase listeners limit to prevent Dev Server warnings
+EventEmitter.defaultMaxListeners = 25;
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
