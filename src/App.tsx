@@ -123,7 +123,7 @@ export default function App() {
             <ShoppingCart size={48} />
           </div>
           <div className="space-y-3">
-            <h1 className="text-4xl font-black text-slate-900 tracking-tight">OmniPOS</h1>
+            <h1 className="text-4xl font-black text-slate-900 tracking-tight">WebPOS</h1>
             <p className="text-slate-400 font-medium leading-relaxed">Secure Point of Sale Management System. Please sign in to continue.</p>
           </div>
           <button 
@@ -166,7 +166,7 @@ export default function App() {
               animate={{ opacity: 1 }}
               className="font-bold text-xl tracking-tight text-white"
             >
-              OmniPOS system
+              WebPOS
             </motion.span>
           )}
         </div>

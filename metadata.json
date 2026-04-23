@@ -1,5 +1,5 @@
 {
-  "name": "OmniPOS system",
+  "name": "WebPOS",
   "description": "A professional Point of Sale (POS) system with inventory management, real-time reporting, and integrated payments via Paystack and Hubtel.",
   "requestFramePermissions": [],
   "majorCapabilities": []

@@ -1,4 +1,4 @@
-# Security Specification for OmniPOS
+# Security Specification for WebPOS
 
 ## Data Invariants
 1. A **Sale** cannot be created without a valid cashier ID identifying the authenticated user.
