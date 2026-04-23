@@ -47,12 +47,12 @@
       "properties": {
         "id": { "type": "string" },
         "name": { "type": "string" },
-        "email": { "type": "string" },
+        "email": { "type": "string", "format": "email" },
         "phone": { "type": "string" },
         "address": { "type": "string" },
         "loyaltyPoints": { "type": "integer" }
       },
-      "required": ["name"]
+      "required": ["name", "email"]
     },
     "Sale": {
       "title": "Sale",

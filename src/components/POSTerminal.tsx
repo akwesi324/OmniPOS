@@ -397,9 +397,26 @@ export default function POSTerminal() {
                       </div>
                     )}
 
-                    <div className="pt-4 border-t border-slate-100 dark:border-slate-800 flex justify-between items-center">
-                      <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Amount Due</span>
-                      <p className="text-sm font-black text-blue-600">GHS {total.toFixed(2)}</p>
+                    <div className="pt-4 border-t border-slate-100 dark:border-slate-800 space-y-3">
+                      <div className="flex justify-between items-center text-left">
+                        <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Amount Due</span>
+                        <p className="text-sm font-black text-blue-600">GHS {total.toFixed(2)}</p>
+                      </div>
+                      
+                      {['waiting', 'verifying', 'initializing'].includes(paymentStatus) && (
+                        <button 
+                          onClick={() => {
+                            if (window.confirm('Are you sure you want to quit this transaction? Any pending mobile prompts will still need to be handled on your device.')) {
+                              setPaymentStatus('idle');
+                              setErrorMessage(null);
+                            }
+                          }}
+                          className="w-full py-3 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-red-100 dark:hover:bg-red-900/40 transition-all flex items-center justify-center gap-2"
+                        >
+                          <XCircle size={14} />
+                          Quit Transaction
+                        </button>
+                      )}
                     </div>
                   </div>
                 ) : paymentStatus === 'success' ? (
