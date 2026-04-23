@@ -37,7 +37,11 @@ export default function Settings({ user }: { user: any }) {
       try {
         const fb = await getFirebase();
         if (!fb) {
-          // If firebase is not configured, we might be in mock mode
+          // Check if we have env vars instead for the platform-first approach
+          setConfig({
+            paystackPublicKey: import.meta.env.VITE_PAYSTACK_PUBLIC_KEY || '',
+            paystackSecretKey: '••••••••••••••••'
+          });
           setLoading(false);
           return;
         }
@@ -65,7 +69,11 @@ export default function Settings({ user }: { user: any }) {
 
     try {
       const fb = await getFirebase();
-      if (!fb) throw new Error('Firebase not initialized');
+      if (!fb) {
+        setError('Firebase not initialized. To save keys securely in this environment, please use the "Settings" menu in the top-right of AI Studio.');
+        setSaving(false);
+        return;
+      }
 
       await setDoc(doc(fb.db, 'config', 'system'), {
         ...config,
@@ -139,6 +147,17 @@ export default function Settings({ user }: { user: any }) {
               <ShieldCheck size={12} className="text-green-600" />
               <span className="text-[10px] font-black text-green-600 uppercase tracking-widest">Secure Entry</span>
             </div>
+          </div>
+
+          <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-xl border border-blue-100 dark:border-blue-900/30 flex gap-3">
+             <ShieldCheck className="text-blue-600 shrink-0" size={20} />
+             <div className="space-y-1">
+                <p className="text-xs font-bold text-blue-900 dark:text-blue-300 uppercase tracking-tight">Platform-First Security</p>
+                <p className="text-[11px] text-blue-700 dark:text-blue-400 leading-relaxed font-medium">
+                  In this environment, we recommend setting <b>PAYSTACK_SECRET_KEY</b> and <b>VITE_PAYSTACK_PUBLIC_KEY</b> via the platform's 
+                  Settings menu. Keys set there are injected securely and override database configurations.
+                </p>
+             </div>
           </div>
 
           <div className="space-y-6">

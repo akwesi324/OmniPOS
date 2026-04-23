@@ -20,12 +20,16 @@ const __dirname = path.dirname(__filename);
 const PAYSTACK_BASE_URL = 'https://api.paystack.co';
 
 function getPaystackSecretKey(): string {
-  const rawKey = process.env.PAYSTACK_SECRET_KEY || 'sk_live_7ae454186282ac8ffcc646f103e227b0f885954f';
+  const rawKey = process.env.PAYSTACK_SECRET_KEY || '';
+  
+  if (!rawKey) {
+    console.warn('[PAYSTACK] No secret key found in environment variables. Please set PAYSTACK_SECRET_KEY in the AI Studio Settings menu.');
+  }
+
   // Robust cleaning: remove "Bearer ", leading/trailing quotes, commas, and whitespace
-  // A standard Paystack key should look like sk_live_... or sk_test_...
   const cleaned = rawKey.trim()
     .replace(/^Bearer\s+/i, '')
-    .replace(/["',)]/g, '') // Remove quotes, commas, parentheses commonly copied from chat/code
+    .replace(/["',)]/g, '') 
     .trim();
   return cleaned;
 }
