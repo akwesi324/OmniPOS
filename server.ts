@@ -93,7 +93,7 @@ async function startServer() {
 
     const normalizedPhone = normalizePhone(phone || '');
     const amountPesewas = Math.round(Number(amount) * 100);
-    const reference = `POS-${uuidv4().substring(0, 14).toUpperCase()}`;
+    const reference = `POS-${uuidv4().replace(/-/g, '').substring(0, 15).toUpperCase()}`;
 
     if (isNaN(amountPesewas) || amountPesewas < 100) {
       return res.status(400).json({ status: false, message: 'Invalid amount. Minimum GHS 1.00 is required.' });
@@ -240,7 +240,7 @@ async function startServer() {
             reference: data.reference,
             amount: data.amount / 100,
             display_text: data.display_text || data.gateway_response || 'Processing transaction...',
-            message: messageParts.join(' | ') || 'Transaction status fetched'
+            message: data.gateway_response || data.message || messageParts.join(' | ') || 'Transaction status fetched'
           }
         });
       } else {
