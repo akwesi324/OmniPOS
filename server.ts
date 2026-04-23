@@ -106,7 +106,9 @@ async function startServer() {
       }
     };
 
-    console.log(`[PAYSTACK] Charging ${normalizedPhone} GHS ${amount}`);
+    console.log(`[PAYSTACK] Charging ${normalizedPhone} GHS ${amount} via ${provider || 'mtn'}`);
+    const maskedKey = secretKey.length > 8 ? `...${secretKey.substring(secretKey.length - 4)}` : 'INVALID_KEY_LENGTH';
+    console.log(`[PAYSTACK] Using Key: ${maskedKey}`);
 
     try {
       const response = await axios.post(`${PAYSTACK_BASE_URL}/charge`, payload, {
@@ -116,7 +118,7 @@ async function startServer() {
         }
       });
 
-      console.log(`[PAYSTACK] Response:`, JSON.stringify(response.data, null, 2));
+      console.log(`[PAYSTACK] Init Response Data:`, JSON.stringify(response.data, null, 2));
 
       if (response.data.status) {
         res.json({
@@ -128,13 +130,14 @@ async function startServer() {
           }
         });
       } else {
+        console.error(`[PAYSTACK] Init Failed:`, response.data.message);
         res.status(400).json({ status: false, message: response.data.message || 'Charge failed' });
       }
     } catch (error: any) {
       const errorData = error.response?.data;
-      console.error(`[PAYSTACK] Error:`, JSON.stringify(errorData || error.message, null, 2));
+      console.error(`[PAYSTACK] Axios Error:`, JSON.stringify(errorData || error.message, null, 2));
       const message = errorData?.message || errorData?.data?.message || error.message || 'Paystack initialization failed';
-      res.status(500).json({ status: false, message });
+      res.status(error.response?.status || 500).json({ status: false, message });
     }
   });
 
@@ -183,6 +186,7 @@ async function startServer() {
     }
 
     try {
+      console.log(`[PAYSTACK] Verifying Reference: ${reference}`);
       const response = await axios.get(`${PAYSTACK_BASE_URL}/charge/${encodeURIComponent(reference)}`, {
         headers: {
           Authorization: `Bearer ${secretKey}`,
@@ -193,6 +197,7 @@ async function startServer() {
       if (response.data.status) {
         const data = response.data.data;
         const tx_status = data.status;
+        console.log(`[PAYSTACK] Transaction ${reference} status: ${tx_status}`);
         
         let status = 'pending';
         if (tx_status === 'success') status = 'success';

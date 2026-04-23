@@ -105,7 +105,7 @@ export default function POSTerminal() {
         } catch (err) {
           console.error("Polling error", err);
         }
-      }, 10000);
+      }, 5000);
     }
     return () => clearInterval(interval);
   }, [paymentStatus, transactionDetails, activeProvider]);
@@ -404,18 +404,52 @@ export default function POSTerminal() {
                       </div>
                       
                       {['waiting', 'verifying', 'initializing'].includes(paymentStatus) && (
-                        <button 
-                          onClick={() => {
-                            if (window.confirm('Are you sure you want to quit this transaction? Any pending mobile prompts will still need to be handled on your device.')) {
-                              setPaymentStatus('idle');
-                              setErrorMessage(null);
-                            }
-                          }}
-                          className="w-full py-3 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-red-100 dark:hover:bg-red-900/40 transition-all flex items-center justify-center gap-2"
-                        >
-                          <XCircle size={14} />
-                          Quit Transaction
-                        </button>
+                        <div className="flex flex-col gap-2">
+                          <button 
+                            onClick={async () => {
+                              const txRef = transactionDetails?.reference || transactionDetails?.tx_ref;
+                              if (!txRef) return;
+                              setPaymentStatus('verifying');
+                              try {
+                                const endpoint = activeProvider === 'Paystack' 
+                                  ? `/api/payments/paystack/verify/${txRef}`
+                                  : activeProvider === 'Hubtel'
+                                  ? `/api/payments/hubtel/verify/${txRef}`
+                                  : `/api/payments/flutterwave/verify/${txRef}`;
+                                  
+                                const verifyRes = await fetch(endpoint);
+                                const verifyResult = await verifyRes.json();
+                                if (verifyResult.status === true && (verifyResult.data?.status === 'success' || verifyResult.data?.status === 'successful')) {
+                                  completeSale();
+                                } else {
+                                  setPaymentStatus('waiting');
+                                  setErrorMessage(verifyResult.data?.message || 'Still pending...');
+                                  setTimeout(() => setErrorMessage(null), 3000);
+                                }
+                              } catch (err) {
+                                setErrorMessage('Refresh failed');
+                                setPaymentStatus('waiting');
+                              }
+                            }}
+                            className="w-full py-3 bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-blue-100 dark:hover:bg-blue-900/40 transition-all flex items-center justify-center gap-2"
+                          >
+                            <RefreshCw size={14} className={paymentStatus === 'verifying' ? 'animate-spin' : ''} />
+                            Refresh Status
+                          </button>
+                          
+                          <button 
+                            onClick={() => {
+                              if (window.confirm('Are you sure you want to quit this transaction? Any pending mobile prompts will still need to be handled on your device.')) {
+                                setPaymentStatus('idle');
+                                setErrorMessage(null);
+                              }
+                            }}
+                            className="w-full py-3 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-red-100 dark:hover:bg-red-900/40 transition-all flex items-center justify-center gap-2"
+                          >
+                            <XCircle size={14} />
+                            Quit Transaction
+                          </button>
+                        </div>
                       )}
                     </div>
                   </div>
