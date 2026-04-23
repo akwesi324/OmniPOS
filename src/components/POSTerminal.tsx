@@ -99,9 +99,18 @@ export default function POSTerminal() {
             
           const verifyRes = await fetch(endpoint);
           const verifyResult = await verifyRes.json();
-          if (verifyResult.status === true && (verifyResult.data?.status === 'success' || verifyResult.data?.status === 'successful')) {
-            completeSale();
-            clearInterval(interval);
+          
+          if (verifyResult.status === true) {
+            const txStatus = verifyResult.data?.status;
+            
+            if (txStatus === 'success') {
+              completeSale();
+              clearInterval(interval);
+            } else if (txStatus === 'failed') {
+              setPaymentStatus('error');
+              setErrorMessage(verifyResult.data?.message || 'Transaction failed or was declined.');
+              clearInterval(interval);
+            }
           }
         } catch (err) {
           console.error("Polling error", err);
@@ -138,6 +147,9 @@ export default function POSTerminal() {
     setPaymentStatus('initializing');
     setIsMoMoModalOpen(false);
 
+    // Mock customer email selection - in a real app this would come from a selected customer object
+    const customerEmail = selectedCustomer === 'Walk-in Customer' ? `momo_${phone}@pos.store` : `${selectedCustomer.toLowerCase().replace(/\s/g, '.')}@example.com`;
+
     try {
       let endpoint = '/api/payments/paystack/initialize';
       if (provider === 'Flutterwave') endpoint = '/api/payments/flutterwave/initialize';
@@ -148,7 +160,7 @@ export default function POSTerminal() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           amount: total,
-          email: 'customer@example.com',
+          email: customerEmail,
           phone: phone,
           currency: 'GHS',
           provider: momoProvider,

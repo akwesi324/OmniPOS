@@ -11,7 +11,7 @@ import { EventEmitter } from 'events';
 dotenv.config();
 
 // Increase listeners limit to prevent Dev Server warnings
-EventEmitter.defaultMaxListeners = 25;
+EventEmitter.defaultMaxListeners = 100;
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
