@@ -35,6 +35,8 @@ export default function POSTerminal() {
   const [selectedCustomer, setSelectedCustomer] = useState('Walk-in Customer');
   const [showReceipt, setShowReceipt] = useState(false);
   const [lastOrderDetails, setLastOrderDetails] = useState<any>(null);
+  const [retryCount, setRetryCount] = useState(0);
+  const [showRetryAlert, setShowRetryAlert] = useState(false);
 
   const TAX_RATE = 0.175; // 17.5%
 
@@ -149,6 +151,16 @@ export default function POSTerminal() {
 
   const handlePayment = async (provider: string, phone: string) => {
     if (cart.length === 0) return;
+    
+    // Check if this is a retry
+    if (paymentStatus === 'error' || paymentStatus === 'waiting' || paymentStatus === 'otp_required') {
+      setRetryCount(prev => prev + 1);
+      setShowRetryAlert(true);
+      setTimeout(() => setShowRetryAlert(false), 3000);
+    } else {
+      setRetryCount(0);
+    }
+
     setActiveProvider(provider);
     setErrorMessage(null);
     setPaymentStatus('initializing');
@@ -442,6 +454,17 @@ export default function POSTerminal() {
                       {['waiting', 'verifying', 'initializing'].includes(paymentStatus) && (
                         <div className="flex flex-col gap-2">
                           <button 
+                            onClick={() => {
+                              setPaymentStatus('idle');
+                              setErrorMessage(null);
+                              // Keep the modal open so they can retry
+                              setIsMoMoModalOpen(true);
+                            }}
+                            className="w-full py-3 bg-slate-100 dark:bg-slate-800 text-slate-500 rounded-xl font-bold text-[10px] uppercase tracking-widest hover:bg-slate-200 transition-all mb-1"
+                          >
+                            Cancel & Change Number
+                          </button>
+                          <button 
                             onClick={async () => {
                               const txRef = transactionDetails?.reference || transactionDetails?.tx_ref;
                               if (!txRef) return;
@@ -563,15 +586,36 @@ export default function POSTerminal() {
                       <p className="text-sm text-slate-500 leading-relaxed font-medium">{errorMessage || 'The payment was declined or timed out.'}</p>
                     </div>
                     <button 
-                      onClick={() => setPaymentStatus('idle')}
+                      onClick={() => {
+                        setPaymentStatus('idle');
+                        setIsMoMoModalOpen(true);
+                      }}
                       className="w-full py-4 bg-red-600 text-white rounded-xl font-black text-xs uppercase tracking-widest hover:bg-red-700 transition-all font-mono"
                     >
-                      Try Again
+                      Retry Transaction
                     </button>
                   </div>
                 )}
               </div>
             </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Retry Alert */}
+      <AnimatePresence>
+        {showRetryAlert && (
+          <motion.div 
+            initial={{ y: -100, opacity: 0 }}
+            animate={{ y: 20, opacity: 1 }}
+            exit={{ y: -100, opacity: 0 }}
+            className="fixed top-0 left-1/2 -translate-x-1/2 z-[100] bg-blue-600 text-white px-6 py-3 rounded-2xl shadow-2xl flex items-center gap-3 border border-blue-400 font-bold"
+          >
+            <Zap size={20} className="text-yellow-400 animate-pulse" />
+            <div className="flex flex-col">
+              <span className="text-xs uppercase tracking-widest leading-none mb-1 opacity-70">Retry Attempt #{retryCount}</span>
+              <span className="text-sm">Initiating fresh authorization...</span>
+            </div>
           </motion.div>
         )}
       </AnimatePresence>
