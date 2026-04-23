@@ -329,12 +329,13 @@ export default function POSTerminal() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="absolute inset-0 z-50 flex items-center justify-center bg-slate-900/90 backdrop-blur-sm"
+            className="absolute inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-[2px]"
           >
             <motion.div 
-              initial={{ scale: 0.9, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              className="bg-white dark:bg-slate-900 rounded-3xl shadow-2xl text-center max-w-sm w-full mx-4 overflow-hidden"
+              initial={{ scale: 0.9, opacity: 0, y: 40 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.9, opacity: 0, y: 40 }}
+              className="bg-white dark:bg-slate-900 rounded-[2.5rem] shadow-[0_32px_64px_-16px_rgba(0,0,0,0.3)] border border-slate-200 dark:border-slate-800 text-center max-w-sm w-full mx-4 overflow-hidden"
             >
               <div className="p-8">
                 {['initializing', 'waiting', 'verifying', 'otp_required'].includes(paymentStatus) ? (
