@@ -9,6 +9,7 @@ import {
   ShoppingCart as CartIcon,
   CheckCircle2,
   XCircle,
+  RefreshCw,
   Loader2,
   AlertCircle,
   User as UserIcon,
